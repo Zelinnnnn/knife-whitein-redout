@@ -1,6 +1,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>血与刃的白蔷薇</title>
-<style>
+<style> 
 :root{
   --ink:#12101A; --crypt:#1B1725; --crypt2:#231D30; --edge:#332A43;
   --bone:#EDE7DC; --ash:#8C8496; --dim:#5E5670;
