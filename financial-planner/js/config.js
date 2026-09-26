@@ -58,8 +58,19 @@
       raAge: 55,
       payoutAge: 65,
       // Rough CPF LIFE Standard Plan payout per $1 in RA at 65, per month.
-      // Calibrated so an FRS cohort balance gives roughly $1,800-1,900/month.
-      lifePayoutFactor: 0.0056,
+      // Calibrated to the 2026 cohort estimate of about $1,780/month for the
+      // FRS ($220,400 at 55, grown with interest to 65).
+      lifePayoutFactor: 0.0053,
+      // Plans relative to Standard. Escalating starts about 20% lower and
+      // rises 2% a year; Basic pays roughly 10-15% less for a larger bequest.
+      lifePlans: {
+        standard: { label: 'Standard', factor: 1, growth: 0, note: 'Level payouts for life' },
+        escalating: { label: 'Escalating', factor: 0.76, growth: 0.02, note: 'Starts about 24% lower, rises 2% a year' },
+        basic: { label: 'Basic', factor: 0.87, growth: 0, note: 'About 13% lower, leaves more to beneficiaries' },
+      },
+      // CareShield Life severe-disability payout for claims made in 2026,
+      // rising 4% a year to 2030 for later claims.
+      careShieldPayout: 689,
 
       // MediShield Life annual premiums by age (from the Excel template's
       // CPF Estimator sheet). Paid from MediSave.
@@ -111,13 +122,40 @@
       ],
     },
 
+    // Defaults for the detailed (needs-based) cover calculator, in today's
+    // dollars. Sources: Singlife Critical Illness Study 2026 (27-month average
+    // recovery, S$2,349/month rehab and therapy); MOH Integrated Shield rider
+    // co-payment cap of at least S$6,000 a year from April 2026; Singapore
+    // funeral packages of S$5,500-15,000; nursing homes at S$2,000-4,500/month.
+    needs: {
+      supportYears: 10,
+      finalExpenses: 10000,
+      careMonthly: 2500,
+      careYears: 20,
+      homeModification: 15000,
+      ciRecoveryMonths: 27,
+      rehabMonthly: 2349,
+      rehabMonths: 12,
+      ciTreatmentGap: 18000,
+      ciLifestyle: 10000,
+    },
+
+    // Retirement spending in later life: real spending tends to fall about
+    // 20-26% by the mid-80s (Blanchett's "retirement spending smile").
+    spendingSteps: [
+      { age: 75, share: 0.85 },
+      { age: 85, share: 0.75 },
+    ],
+
     // Rule-of-thumb targets used by the Excel template's Financial Health Check.
+    // The LIA/MAS Basic Financial Planning Guide suggests 9x and 4x instead.
     defaults: {
       inflation: 0.03,
       salaryGrowth: 0.02,
       cashRate: 0.005,
       preRetReturn: 0.06,
       postRetReturn: 0.05,
+      retirementGrowth: 0.025, // custom spending growth after retirement
       emergencyMonths: 6,
       deathMultiple: 10,
       ciMultiple: 5,

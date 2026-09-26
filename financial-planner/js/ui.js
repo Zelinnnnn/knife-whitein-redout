@@ -112,7 +112,7 @@
       if (isFinite(n)) props.onChange(percent ? n / 100 : n);
     }
     var id = props.id || slug(props.path || props.label);
-    var control = html`<div class=${'control' + (props.readOnly ? ' readonly' : '')}>
+    var control = html`<div class=${'control' + (props.cls ? ' ' + props.cls : '') + (props.readOnly ? ' readonly' : '')}>
       ${props.prefix !== undefined ? (props.prefix && html`<span class="adorn">${props.prefix}</span>`) : (!percent && !props.suffix && html`<span class="adorn">S$</span>`)}
       <input id=${id} inputmode="decimal" autocomplete="off" value=${text} readOnly=${props.readOnly}
         placeholder=${props.placeholder || ''} aria-label=${props.bare ? props.label : undefined}
@@ -157,7 +157,7 @@
   function Seg(props) {
     return html`<div class="seg" role="group" aria-label=${props.label}>
       ${props.options.map(function (o) {
-        return html`<button type="button" aria-pressed=${String(o.value === props.value)} onClick=${function () { props.onChange(o.value); }}>${o.label}</button>`;
+        return html`<button type="button" title=${o.title} aria-pressed=${String(o.value === props.value)} onClick=${function () { props.onChange(o.value); }}>${o.label}</button>`;
       })}
     </div>`;
   }
@@ -174,6 +174,25 @@
       onClick=${function () { if (armed) { setArmed(false); props.onConfirm(); } else setArmed(true); }}>
       ${props.icon && html`<${Icon} name=${props.icon} />`}${armed ? (props.confirmLabel || 'Click again to confirm') : props.children}
     </button>`;
+  }
+
+  // Plain-language explanations for Singapore planning terms, shown on hover.
+  var GLOSSARY = {
+    TPD: 'Total and permanent disability: unable to work again',
+    CI: 'Critical illness, such as cancer, heart attack or stroke',
+    OA: 'CPF Ordinary Account: housing, insurance and investment',
+    SA: 'CPF Special Account: retirement savings, closed at 55',
+    MA: 'CPF MediSave Account: hospital bills and health insurance',
+    RA: 'CPF Retirement Account: set up at 55 and used for CPF LIFE',
+    BRS: 'Basic Retirement Sum',
+    FRS: 'Full Retirement Sum: twice the Basic Retirement Sum',
+    ERS: 'Enhanced Retirement Sum: four times the Basic Retirement Sum',
+    'CPF LIFE': 'The national annuity: monthly payouts for life from 65',
+    AWS: 'Annual Wage Supplement, the "13th month" bonus',
+  };
+  function Term(props) {
+    var t = GLOSSARY[props.t];
+    return t ? html`<abbr title=${t}>${props.children || props.t}</abbr>` : html`<span>${props.children || props.t}</span>`;
   }
 
   function Meter(props) {
@@ -239,7 +258,7 @@
     html: html, h: h, money: money, compact: compact, pct: pct, slug: slug,
     Icon: Icon, Pill: Pill, StatusIcon: StatusIcon, STATUS_TEXT: STATUS_TEXT, Card: Card, Kpi: Kpi, PageHead: PageHead,
     NumberField: NumberField, TextField: TextField, SelectField: SelectField, Check: Check, Seg: Seg,
-    ConfirmButton: ConfirmButton, Meter: Meter, useWidth: useWidth, inFrame: inFrame, store: store,
+    ConfirmButton: ConfirmButton, Meter: Meter, Term: Term, GLOSSARY: GLOSSARY, useWidth: useWidth, inFrame: inFrame, store: store,
     download: download, copyText: copyText,
   };
 })(window.FP = window.FP || {});

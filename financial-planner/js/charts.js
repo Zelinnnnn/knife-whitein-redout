@@ -112,12 +112,30 @@
       lineEls.push(html`<text class="event-label" x=${lx} y=${m.t - 18 + row * 11} text-anchor=${anchor}>${ln.label}</text>`);
     });
 
-    var pinEls = [];
+    var pinEls = [], lastPin = -1e9;
     if (props.pins) {
       rows.forEach(function (r, i) {
-        if (props.pins(r)) pinEls.push(html`<circle class="fill-ink stroke-surface" stroke-width="2" cx=${x(i) + band / 2} cy=${m.t + ph + 26} r="4.5" />`);
+        if (!props.pins(r)) return;
+        var px = x(i) + band / 2;
+        pinEls.push(html`<circle class="fill-ink stroke-surface" stroke-width="2" cx=${px} cy=${m.t + ph + 26} r="4.5" />`);
+        var lbl = props.pinLabel ? props.pinLabel(r) : '';
+        if (lbl && !compact && px - lastPin > 110 && px < m.l + pw - 60) {
+          pinEls.push(html`<text class="pin-label" x=${px + 8} y=${m.t + ph + 30}>${lbl}</text>`);
+          lastPin = px;
+        }
       });
     }
+    var bandEls = [];
+    (props.bands || []).forEach(function (b) {
+      var i0 = rows.findIndex(function (r) { return r.age >= b.from; });
+      if (i0 < 0) return;
+      var i1 = rows.length - 1;
+      for (var k = rows.length - 1; k >= 0; k--) { if (rows[k].age < b.to) { i1 = k; break; } }
+      if (i1 < i0) return;
+      var bx = x(i0), bw2 = x(i1) + band - bx;
+      bandEls.push(html`<rect class=${'band ' + (b.alt ? 'alt' : '')} x=${bx} y=${m.t} width=${bw2} height=${ph} />`);
+      if (bw2 > 80) bandEls.push(html`<text class="band-label" x=${bx + 6} y=${m.t + 13}>${b.label}</text>`);
+    });
 
     function onMove(e) {
       var rect = ref.current.getBoundingClientRect();
@@ -150,6 +168,7 @@
           return html`<g><line class="grid-line" x1=${m.l} x2=${m.l + pw} y1=${y(t)} y2=${y(t)} />
             <text x=${m.l - 8} y=${y(t) + 3.5} text-anchor="end">${ui.compact(t)}</text></g>`;
         })}
+        ${bandEls}
         ${hover !== null && html`<rect class="hover-band" x=${x(hover)} y=${m.t} width=${band} height=${ph} />`}
         ${bars}
         <line class="axis-line" x1=${m.l} x2=${m.l + pw} y1=${zero} y2=${zero} />
@@ -224,5 +243,119 @@
     </div>`;
   }
 
-  FP.charts = { StackedColumns: StackedColumns, Bullet: Bullet, HBars: HBars, Columns: Columns, niceTicks: niceTicks };
+
+  // ------------------------------------------------------------------ donut
+  function arcPath(cx, cy, r0, r1, a0, a1) {
+    var large = a1 - a0 > Math.PI ? 1 : 0;
+    function pt(r, a) { return (cx + r * Math.cos(a)).toFixed(2) + ',' + (cy + r * Math.sin(a)).toFixed(2); }
+    return 'M' + pt(r1, a0) + 'A' + r1 + ',' + r1 + ' 0 ' + large + ' 1 ' + pt(r1, a1) +
+      'L' + pt(r0, a1) + 'A' + r0 + ',' + r0 + ' 0 ' + large + ' 0 ' + pt(r0, a0) + 'Z';
+  }
+
+  /* Donut with a 2px surface gap between slices and a live legend.
+     items: [{id, label, value, cls, swatch}] in a fixed order (max 6). */
+  function Donut(props) {
+    var st = useState(null), hover = st[0], setHover = st[1];
+    var items = props.items.filter(function (i) { return i.value > 0; });
+    var total = items.reduce(function (t, i) { return t + i.value; }, 0);
+    var size = 220, c = size / 2, R = 100, r = 64;
+    var a = -Math.PI / 2, pad = items.length > 1 ? 2 / R : 0;
+    var slices = items.map(function (it) {
+      var sweep = total > 0 ? it.value / total * Math.PI * 2 : 0;
+      var s0 = a + pad / 2, s1 = a + sweep - pad / 2;
+      a += sweep;
+      return { it: it, a0: s0, a1: Math.max(s0 + 0.001, s1) };
+    });
+    var cur = hover !== null ? items.find(function (i) { return i.id === hover; }) : null;
+    if (!total) return html`<p class="muted small">${props.empty || 'Nothing to show yet.'}</p>`;
+    return html`<div class="donut-wrap">
+      <div class="donut">
+        <svg viewBox=${'0 0 ' + size + ' ' + size} role="img" aria-label=${props.label}>
+          ${slices.map(function (sl) {
+            var on = hover === sl.it.id;
+            return html`<path class=${'d-slice ' + sl.it.cls} d=${arcPath(c, c, on ? r - 2 : r, on ? R + 6 : R, sl.a0, sl.a1)}
+              onPointerEnter=${function () { setHover(sl.it.id); }} onPointerLeave=${function () { setHover(null); }} />`;
+          })}
+          <text class="d-center" x=${c} y=${c + 4} text-anchor="middle">${props.format(cur ? cur.value : total)}</text>
+          <text class="d-sub" x=${c} y=${c + 22} text-anchor="middle">${cur ? cur.label : props.centerLabel || 'Total'}</text>
+        </svg>
+      </div>
+      <ul class="donut-legend">
+        ${props.items.map(function (it) {
+          var share = total > 0 ? it.value / total : 0;
+          return html`<li class=${hover === it.id ? 'on' : ''} tabindex="0" onPointerEnter=${function () { setHover(it.id); }} onPointerLeave=${function () { setHover(null); }}
+              onFocus=${function () { setHover(it.id); }} onBlur=${function () { setHover(null); }}>
+            <i class=${'swatch ' + it.swatch} /><span>${it.label}</span><span class="l-val">${props.format(it.value)}</span><span class="l-pct">${ui.pct(share)}</span>
+          </li>`;
+        })}
+      </ul>
+    </div>`;
+  }
+
+  // ------------------------------------------------------------ plan wheel
+  /* Polar-area wheel: each wedge's length is an area's score (0-1), coloured
+     by status. Centre shows the overall score. */
+  function Wheel(props) {
+    var areas = props.areas, n = areas.length;
+    var W = 400, H = 316, cx = W / 2, cy = H / 2, r0 = 54, R = 120;
+    var step = Math.PI * 2 / n, pad = 0.035;
+    return html`<div class="wheel">
+      <svg viewBox=${'0 0 ' + W + ' ' + H} role="img" aria-label=${'Plan health score ' + (props.overall === null ? 'not available' : props.overall + ' out of 100')}>
+        ${areas.map(function (ar, i) {
+          var a0 = -Math.PI / 2 - step / 2 + i * step + pad, a1 = a0 + step - pad * 2;
+          var mid = (a0 + a1) / 2, len = ar.score === null ? 0 : r0 + (R - r0) * Math.max(0.04, ar.score);
+          var dim = props.active && props.active !== ar.id;
+          var lx = cx + (R + 18) * Math.cos(mid), ly = cy + (R + 18) * Math.sin(mid);
+          var anchor = Math.abs(Math.cos(mid)) < 0.3 ? 'middle' : Math.cos(mid) > 0 ? 'start' : 'end';
+          var dy = Math.sin(mid) < -0.3 ? -6 : Math.sin(mid) > 0.3 ? 10 : 0;
+          return html`<g class=${'w-wedge' + (dim ? ' dim' : '')} onPointerEnter=${function () { props.onHover && props.onHover(ar.id); }} onPointerLeave=${function () { props.onHover && props.onHover(null); }}
+              onClick=${function () { props.onPick && props.onPick(ar); }}>
+            <path class="w-track" d=${arcPath(cx, cy, r0, R, a0, a1)} />
+            ${len > 0 && html`<path class=${'fill-' + ar.status} d=${arcPath(cx, cy, r0, len, a0, a1)} />`}
+            <text class="w-label" x=${lx} y=${ly + dy} text-anchor=${anchor}>${ar.label}</text>
+            <text class="w-score" x=${lx} y=${ly + dy + 14} text-anchor=${anchor}>${ar.score === null ? 'no data' : Math.round(ar.score * 100) + '/100'}</text>
+          </g>`;
+        })}
+        <text class="w-center" x=${cx} y=${cy + 10} text-anchor="middle">${props.overall === null ? '–' : props.overall}</text>
+        <text class="w-sub" x=${cx} y=${cy + 28} text-anchor="middle">out of 100</text>
+      </svg>
+    </div>`;
+  }
+
+  // ------------------------------------------------------------ needs stack
+  var hatchSeq = 0;
+  /* Two bars on one scale: what would be needed (stacked items) and what the
+     policies pay. The shortfall is hatched. */
+  function NeedsStack(props) {
+    var ref = useRef(null);
+    var width = ui.useWidth(ref, 560);
+    var idRef = useRef(null); if (!idRef.current) idRef.current = 'hatch-' + (++hatchSeq);
+    var items = props.items.filter(function (i) { return i.value > 0; });
+    var need = props.need, cover = props.cover;
+    var labelW = width < 420 ? 64 : 84, valueW = width < 420 ? 74 : 96;
+    var pw = Math.max(40, width - labelW - valueW), max = Math.max(need, cover, 1);
+    var sx = function (v) { return labelW + v / max * pw; };
+    var H = 86, bh = 22, y1 = 8, y2 = 50;
+    var acc = 0, segs = items.map(function (it, k) {
+      var x0 = sx(acc) + (k > 0 ? 1 : 0), x1 = sx(acc + it.value) - (k < items.length - 1 ? 1 : 0);
+      acc += it.value;
+      return html`<rect class=${it.cls} x=${x0} y=${y1} width=${Math.max(0.5, x1 - x0)} height=${bh} rx="3"><title>${it.label + ': ' + ui.money(it.value)}</title></rect>`;
+    });
+    var gap = Math.max(0, need - cover);
+    return html`<div class="needs-stack" ref=${ref}>
+      <svg viewBox=${'0 0 ' + width + ' ' + H} width=${width} height=${H} role="img" aria-label=${'Needed ' + ui.money(need) + ', covered ' + ui.money(cover) + (gap ? ', gap ' + ui.money(gap) : '')}>
+        <defs><pattern id=${idRef.current} patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)"><rect width="2.5" height="7" class="fill-critical" /></pattern></defs>
+        <text x="0" y=${y1 + 15}>Needed</text>
+        ${segs}
+        <text class="ns-strong" x=${width} y=${y1 + 15} text-anchor="end">${ui.money(need)}</text>
+        <text x="0" y=${y2 + 15}>Covered</text>
+        <rect class="fill-track" x=${labelW} y=${y2} width=${pw} height=${bh} rx="3" />
+        ${cover > 0 && html`<rect class="fill-ink" x=${labelW} y=${y2} width=${Math.max(1, sx(cover) - labelW)} height=${bh} rx="3" />`}
+        ${gap > 0 && html`<rect fill=${'url(#' + idRef.current + ')'} x=${sx(cover)} y=${y2} width=${sx(need) - sx(cover)} height=${bh} />`}
+        <text class=${gap > 0 ? 'ns-gap' : 'ns-strong'} x=${width} y=${y2 + 15} text-anchor="end">${gap > 0 ? 'Gap ' + ui.compact(gap) : ui.money(cover)}</text>
+      </svg>
+    </div>`;
+  }
+
+  FP.charts = { StackedColumns: StackedColumns, Bullet: Bullet, HBars: HBars, Columns: Columns, Donut: Donut, Wheel: Wheel, NeedsStack: NeedsStack, niceTicks: niceTicks };
 })(window.FP = window.FP || {});

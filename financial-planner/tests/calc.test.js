@@ -152,3 +152,87 @@ test('computeAll runs on sample and blank data', () => {
     assert.ok(Number.isFinite(m.cashflow.surplus));
   }
 });
+
+test('Detailed needs: death defaults build up from the plan', () => {
+  const s = data.sample();
+  s.liabilities.push({ id: 'home', owner: 'joint', type: 'mortgage', balance: 300000, monthly: 1500, cpfMonthly: 1000, yearsLeft: 25 });
+  const cf = calc.cashflowAnalysis(s);
+  const [alex, jamie] = calc.protectionAnalysis(s, cf);
+  const d = alex.needs.death;
+  const item = (id) => d.items.find((i) => i.id === id);
+  assert.equal(item('mortgage').total, 300000); // joint home loan cleared in full
+  assert.equal(item('final').total, 10000);
+  assert.equal(item('support').duration, 10);
+  close(item('support').total, item('support').monthly * 12 * 10);
+  assert.equal(jamie.needs.death.items.find((i) => i.id === 'debts').total, 12000); // Jamie's study loan
+  // CI: CPF share of the home loan must be paid in cash while recovering
+  const cpfLoan = alex.needs.ci.items.find((i) => i.id === 'cpfLoan');
+  assert.equal(cpfLoan.monthly, 500);
+  assert.equal(cpfLoan.duration, 27);
+});
+
+test('Detailed needs drive targets when chosen, with overrides and offsets', () => {
+  const s = data.sample();
+  s.needs = { client: { method: 'needs', death: { support: { monthly: 5000, duration: 20 }, education: { on: false }, offsetSavings: true } } };
+  const cf = calc.cashflowAnalysis(s);
+  const [alex] = calc.protectionAnalysis(s, cf);
+  assert.equal(alex.method, 'needs');
+  const d = alex.needs.death;
+  assert.equal(d.items.find((i) => i.id === 'support').total, 5000 * 12 * 20);
+  assert.equal(d.items.find((i) => i.id === 'education').total, 0);
+  assert.equal(d.offsets[0].amount, 18000); // Alex's savings + ETFs
+  assert.equal(alex.target.death, Math.round((d.gross - 18000) / 1000) * 1000);
+  assert.notEqual(alex.target.death, alex.rule.death);
+});
+
+test('Retirement spending patterns change the nest egg', () => {
+  const base = { age: 30, retireAge: 60, horizonAge: 90, monthlyToday: 4000, inflation: 0.03, returnRate: 0.05 };
+  const infl = calc.nestEggTarget(base).target;
+  const flat = calc.nestEggTarget({ ...base, growth: 0 }).target;
+  const slower = calc.nestEggTarget({ ...base, growth: 0.025 }).target;
+  const steps = calc.nestEggTarget({ ...base, steps: [{ age: 75, share: 0.85 }, { age: 85, share: 0.75 }] }).target;
+  assert.ok(flat < slower && slower < infl);
+  assert.ok(steps < infl);
+  const s = data.sample();
+  const t0 = calc.computeAll(s).retirement.base.target;
+  s.retirement.growth = 'custom'; s.retirement.growthRate = 0.025;
+  assert.ok(calc.computeAll(s).retirement.base.target < t0);
+});
+
+test('CPF LIFE plans: escalating starts lower and grows 2% a year', () => {
+  const s = data.sample();
+  s.hasSpouse = false;
+  const std = calc.simulate(s);
+  s.cpf.client.lifePlan = 'escalating';
+  const esc = calc.simulate(s);
+  const at = (sim, age) => sim.rows.find((r) => r.age === age).flows.cpfLife;
+  close(at(esc, 65) / at(std, 65), 0.76, 0.001);
+  close(at(esc, 66) / at(esc, 65), 1.02, 0.0001);
+  assert.equal(at(std, 66), at(std, 65));
+});
+
+test('Health score and prioritised actions', () => {
+  const m = calc.computeAll(data.sample());
+  assert.ok(m.score.overall > 0 && m.score.overall <= 100);
+  assert.equal(m.score.areas.length, 6);
+  const w = m.health.recommendations.map((r) => r.weight);
+  assert.deepEqual(w, [...w].sort((a, b) => b - a));
+  assert.ok(m.health.recommendations.every((r) => r.go));
+});
+
+test('Empty plan shows no false passes', () => {
+  const m = calc.computeAll(data.blank());
+  const st = (id) => m.health.items.find((i) => i.id === id).status;
+  assert.equal(st('emergency'), 'warning');
+  assert.equal(st('surplus'), 'warning');
+  assert.equal(st('timeline'), 'warning');
+  assert.equal(m.score.overall === null || m.score.overall >= 0, true);
+});
+
+test('Event labels use "You retire" grammar', () => {
+  const s = data.blank();
+  s.people.client.age = 60; s.people.client.retireAge = 62;
+  s.income.client.salary = 5000;
+  const ev = calc.simulate(s).rows.flatMap((r) => r.events).map((e) => e.label);
+  assert.ok(ev.includes('You retire'));
+});
