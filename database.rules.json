@@ -1,0 +1,46 @@
+{
+  "rules": {
+    "brRooms": {
+      "$code": {
+        "pub": {
+          ".read": "auth != null",
+          ".write": "auth != null && (data.child('host').val() === auth.uid || (!data.exists() && newData.child('host').val() === auth.uid) || (data.exists() && newData.child('host').val() === auth.uid && newData.parent().child('seats/' + newData.child('hostPid').val() + '/uid').val() === auth.uid && (!root.child('brRooms/' + $code + '/seats/' + data.child('hostPid').val() + '/lastSeen').exists() || root.child('brRooms/' + $code + '/seats/' + data.child('hostPid').val() + '/lastSeen').val() < now - 75000)))"
+        },
+        "seats": {
+          ".read": "auth != null",
+          "$pid": {
+            ".write": "auth != null && newData.parent().parent().child('pub/host').val() === auth.uid",
+            "lastSeen": {
+              ".write": "auth != null && data.parent().child('uid').val() === auth.uid"
+            }
+          }
+        },
+        "joins": {
+          ".read": "auth != null && root.child('brRooms/' + $code + '/pub/host').val() === auth.uid",
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && (auth.uid === $uid || root.child('brRooms/' + $code + '/pub/host').val() === auth.uid)"
+          }
+        },
+        "actions": {
+          ".read": "auth != null && root.child('brRooms/' + $code + '/pub/host').val() === auth.uid",
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        },
+        "secrets": {
+          ".read": "auth != null && root.child('brRooms/' + $code + '/pub/host').val() === auth.uid",
+          "$pid": {
+            ".read": "auth != null && root.child('brRooms/' + $code + '/seats/' + $pid + '/uid').val() === auth.uid",
+            ".write": "auth != null && newData.parent().parent().child('pub/host').val() === auth.uid"
+          }
+        },
+        "hidden": {
+          ".read": "auth != null && root.child('brRooms/' + $code + '/pub/host').val() === auth.uid",
+          ".write": "auth != null && newData.parent().child('pub/host').val() === auth.uid"
+        }
+      }
+    }
+  }
+}

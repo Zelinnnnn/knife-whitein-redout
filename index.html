@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12101A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>血与刃的白蔷薇</title>
+<style>
+:root{
+  --ink:#12101A; --crypt:#1B1725; --crypt2:#231D30; --edge:#332A43;
+  --bone:#EDE7DC; --ash:#8C8496; --dim:#5E5670;
+  --blood:#C4303E; --blood-d:#7C1723;
+  --rose:#F4E9EE; --gold:#C9A45C; --sanct:#7FA8C9; --live:#6FBF86;
+  --serif:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC",Georgia,serif;
+  --sans:-apple-system,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--ink);color:var(--bone);font-family:var(--sans);
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+body{background:
+  radial-gradient(120% 70% at 50% -10%, #2A1F33 0%, transparent 60%),
+  radial-gradient(90% 50% at 50% 110%, #24121A 0%, transparent 60%), var(--ink);
+  min-height:100dvh}
+#app{max-width:460px;margin:0 auto;padding:18px 16px 40px}
+#app.wide{max-width:980px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;margin:0}
+.eyebrow{font-size:11px;letter-spacing:.32em;color:var(--dim);text-transform:uppercase;margin-bottom:8px}
+.title{font-family:var(--serif);font-size:30px;letter-spacing:.14em;line-height:1.3}
+.title .b{color:var(--blood)}
+.sub{color:var(--ash);font-size:13px;line-height:1.7;margin-top:10px}
+.panel{background:linear-gradient(180deg,var(--crypt2),var(--crypt));border:1px solid var(--edge);
+  border-radius:14px;padding:16px;margin:14px 0}
+.rule{height:1px;background:linear-gradient(90deg,transparent,var(--edge),transparent);margin:18px 0}
+label{display:block;font-size:12px;letter-spacing:.18em;color:var(--dim);margin:0 0 7px}
+input,textarea{width:100%;background:#0E0C15;border:1px solid var(--edge);color:var(--bone);border-radius:10px;
+  padding:13px 14px;font-size:16px;font-family:var(--sans);outline:none;-webkit-user-select:text;user-select:text}
+textarea{font-family:var(--mono);font-size:12px;min-height:150px;resize:vertical}
+input:focus,textarea:focus{border-color:var(--gold)}
+input.code{font-family:var(--mono);letter-spacing:.4em;text-transform:uppercase;text-align:center;font-size:22px}
+button{font-family:var(--sans);font-size:15px;border-radius:10px;border:1px solid var(--edge);
+  background:var(--crypt2);color:var(--bone);padding:13px 16px;width:100%;margin-top:10px;cursor:pointer;
+  transition:transform .08s,background .15s}
+button:active{transform:scale(.985)}
+button:disabled{opacity:.35}
+button.primary{background:linear-gradient(180deg,#A32330,#7C1723);border-color:#93202C;font-weight:600;letter-spacing:.08em}
+button.ghost{background:transparent}
+button.gold{background:linear-gradient(180deg,#B08A3F,#8A6A2B);border-color:#A17F38;color:#1A1410;font-weight:700}
+button.small{width:auto;padding:7px 12px;font-size:12.5px;margin:0}
+.row{display:flex;gap:8px}
+.row>button{margin-top:0}
+.err{color:var(--blood);font-size:13px;min-height:18px;margin-top:8px;line-height:1.6}
+.code-big{font-family:var(--mono);font-size:36px;letter-spacing:.28em;color:var(--gold);text-align:center;padding:6px 0 2px}
+.plist{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.pl{display:flex;align-items:center;gap:10px;background:#0E0C15;border:1px solid var(--edge);
+  border-radius:10px;padding:11px 13px;font-size:14px}
+.pl .seat{font-family:var(--mono);font-size:11px;color:var(--dim);width:18px}
+.pl .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:99px;background:var(--live);flex:none}
+.dot.off{background:#4A4258}
+.tag{font-size:10px;letter-spacing:.1em;padding:3px 7px;border-radius:99px;border:1px solid var(--edge);color:var(--ash);white-space:nowrap}
+.tag.coin{color:#1A1410;background:var(--gold);border-color:var(--gold);font-weight:700}
+.tag.done{color:var(--dim)}
+.tag.turn{color:var(--blood);border-color:var(--blood-d)}
+.tag.ok{color:#7FBF8F;border-color:#2F5238}
+.tag.off{color:#8E86A0;border-style:dashed}
+.banner{background:#2A1A20;border:1px solid var(--blood-d);border-radius:12px;padding:12px 14px;margin:12px 0;font-size:13px;line-height:1.6}
+.banner button{margin-top:8px}
+
+/* ===== 实体风格图板 ===== */
+.board{position:relative;border-radius:18px;overflow:hidden;border:1px solid #2B2236;margin:12px 0 8px;
+  background:#0B090F;aspect-ratio:1/1.02;display:flex;flex-direction:column;container-type:inline-size}
+.board .bg{position:absolute;inset:0;display:flex}
+.board .bg .l{flex:1;background:
+  radial-gradient(30% 22% at 50% 52%,rgba(255,236,200,.22),transparent 70%),
+  radial-gradient(60% 40% at 50% 8%,rgba(255,255,255,.07),transparent 70%),
+  radial-gradient(2px 2px at 20% 30%,rgba(255,230,190,.8),transparent 60%),
+  radial-gradient(2px 2px at 80% 36%,rgba(255,230,190,.7),transparent 60%),
+  radial-gradient(1.5px 1.5px at 30% 60%,rgba(255,240,220,.5),transparent 60%),
+  radial-gradient(1.5px 1.5px at 70% 58%,rgba(255,240,220,.5),transparent 60%),
+  linear-gradient(180deg,#1A1820 0%,#16141B 45%,#24222A 62%,#121016 100%)}
+.board .bg .r{flex:1;background:
+  radial-gradient(14% 10% at 50% 22%,rgba(220,30,40,.55),transparent 70%),
+  linear-gradient(180deg,transparent 0%,rgba(130,10,20,.0) 40%,rgba(130,10,20,.35) 62%,transparent 80%),
+  repeating-linear-gradient(90deg,transparent 0 9%,rgba(150,20,30,.22) 9% 10%,transparent 10% 15%),
+  linear-gradient(180deg,#141015 0%,#120D10 50%,#1F1114 64%,#0E0A0C 100%)}
+.board .bg .beam{position:absolute;left:73%;top:0;width:2px;height:58%;background:linear-gradient(180deg,rgba(255,255,255,.55),transparent);filter:blur(1px)}
+.board .fg{position:relative;flex:1;display:flex;flex-direction:column;padding:3.5cqw 3cqw 3cqw}
+.bd-badge{align-self:center;display:flex;align-items:center;gap:1.4cqw;background:rgba(160,150,160,.55);color:#211C24;
+  border-radius:99px;padding:.8cqw 3cqw;font-weight:800;font-size:4.2cqw;font-family:var(--sans)}
+.bd-badge svg{width:4.4cqw;height:4.4cqw}
+.bd-slots{display:flex;justify-content:center;gap:2cqw;margin-top:3.6cqw}
+.bd-slot{flex:0 1 15cqw;aspect-ratio:.7;border:1.5px solid rgba(255,255,255,.45);border-radius:2cqw;
+  background:rgba(20,16,26,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:Georgia,var(--serif);color:#F5F1EA;font-size:7.4cqw;line-height:1;position:relative;backdrop-filter:blur(1px)}
+.bd-slot.used{background:rgba(127,168,201,.16);border-color:rgba(127,168,201,.75)}
+.bd-slot.used .rn{font-size:3cqw;color:rgba(255,255,255,.45);position:absolute;top:1.2cqw;left:1.6cqw}
+.bd-slot.used .cn{color:var(--sanct);font-size:6.4cqw}
+.bd-slot .ow{font-family:var(--sans);font-size:2.3cqw;color:rgba(255,255,255,.7);margin-top:1cqw;max-width:92%;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.bd-slot.now{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 4cqw rgba(201,164,92,.45)}
+.bd-slots.many .bd-slot{font-size:5.2cqw}
+.bd-halves{display:flex;gap:2.4cqw;flex:1;margin-top:3cqw;min-height:0}
+.bd-half{flex:1;display:flex;flex-direction:column;min-width:0}
+.bd-goal{display:flex;align-items:center;justify-content:center;gap:1.6cqw;font-family:Georgia,var(--serif);
+  color:#F7F3EC;font-size:7.6cqw;text-shadow:0 1px 6px rgba(0,0,0,.8);height:11cqw}
+.bd-goal svg{height:8.4cqw;width:auto}
+.bd-goal .x{font-size:5.6cqw;margin:0 .4cqw}
+.bd-goal .cnt{font-family:var(--sans);font-size:3cqw;color:rgba(255,255,255,.65);margin-left:1cqw;letter-spacing:.05em}
+.bd-stack{flex:1;display:flex;flex-direction:column;position:relative;min-height:0;margin-top:1cqw}
+.bd-tile{position:relative;flex:none;height:13cqw;margin-top:-4.6cqw;border:1.5px solid rgba(255,255,255,.5);
+  border-radius:4cqw 4cqw 2cqw 2cqw;background:rgba(68,58,60,.55);display:flex;align-items:flex-start;gap:1.8cqw;
+  padding:1.6cqw 3cqw;font-family:var(--serif);font-size:3.6cqw;color:#F2EEE8;letter-spacing:.06em;
+  box-shadow:0 -2px 10px rgba(0,0,0,.35)}
+.bd-tile:first-child{margin-top:0}
+.bd-tile.empty{background:rgba(70,62,64,.42);color:transparent}
+.bd-tile .mk{font-size:4.2cqw;line-height:1}
+.bd-tile .rd{margin-left:auto;font-family:var(--sans);font-size:2.6cqw;color:rgba(255,255,255,.6);letter-spacing:.02em}
+.bd-half.w .bd-tile.fill{background:linear-gradient(180deg,rgba(244,233,238,.30),rgba(120,110,112,.5));border-color:rgba(255,250,245,.85)}
+.bd-half.r .bd-tile.fill{background:linear-gradient(180deg,rgba(196,48,62,.55),rgba(80,22,30,.6));border-color:rgba(255,140,150,.7)}
+.bd-tile.bonus .mk{color:var(--gold)}
+.bd-half.done .bd-goal{color:var(--gold)}
+.bd-foot{text-align:center;font-size:2.8cqw;color:rgba(255,255,255,.62);margin-top:2cqw;letter-spacing:.08em}
+.bd-foot b{color:var(--rose)}
+.bd-foot .hit{color:#FF8A95}
+
+/* identity card */
+.idcard{position:relative;border-radius:16px;border:1px solid var(--edge);
+  background:linear-gradient(160deg,#241D2F,#15111E);padding:26px 18px;text-align:center;overflow:hidden;touch-action:none}
+.idcard .veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,#241D2F,#15111E);gap:8px;transition:opacity .18s}
+.idcard.open .veil{opacity:0;pointer-events:none}
+.idcard .veil .lock{font-size:13px;letter-spacing:.28em;color:var(--dim)}
+.idcard .veil .hint{font-size:11px;color:#463E58;letter-spacing:.1em}
+.idname{font-family:var(--serif);font-size:34px;letter-spacing:.16em}
+.idcamp{font-size:12px;letter-spacing:.3em;margin-top:8px}
+.idcard .desc{font-size:12.5px;color:var(--ash);line-height:1.75;margin-top:14px}
+.w-txt{color:var(--rose)} .r-txt{color:var(--blood)}
+
+/* cards in hand */
+.hand{display:flex;gap:8px;margin-top:12px}
+.card{flex:1;aspect-ratio:.68;border-radius:12px;border:1px solid var(--edge);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;background:linear-gradient(165deg,#241D2F,#15111E);
+  font-family:var(--serif);font-size:17px;letter-spacing:.1em;position:relative;max-width:32%}
+.card.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.card .mk{font-size:20px;line-height:1}
+.card.w{color:var(--rose)} .card.r{color:var(--blood)} .card.g{color:var(--ash)}
+.card .cap{font-size:9.5px;letter-spacing:.18em;color:var(--dim);font-family:var(--sans)}
+.hand.mini .card{font-size:13px;aspect-ratio:auto;padding:10px 4px}
+
+/* crystal */
+.crystal{text-align:center;padding:20px 14px;border-radius:16px;border:1px solid var(--edge);
+  background:radial-gradient(80% 90% at 50% 0%,#2C2440,#15111E)}
+.crystal .num{font-family:var(--serif);font-size:56px;color:var(--sanct);line-height:1;letter-spacing:.06em}
+.crystal .nm{font-family:var(--serif);font-size:20px;letter-spacing:.16em;margin-top:10px}
+.crystal .ds{font-size:12.5px;color:var(--ash);line-height:1.75;margin-top:8px}
+
+.note{background:#0E0C15;border-left:2px solid var(--sanct);border-radius:0 10px 10px 0;padding:11px 13px;
+  font-size:13px;line-height:1.65;margin-top:8px;color:#CFC7D8}
+.note b{color:var(--bone)}
+.logbox{max-height:190px;overflow-y:auto;font-size:12.5px;color:var(--ash);line-height:1.85}
+.logbox div{padding:3px 0;border-bottom:1px dashed #241E32}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.pick button{margin-top:0;font-size:14px;padding:12px 8px}
+.reveal{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0}
+.rc{width:62px;aspect-ratio:.68;border-radius:10px;border:1px solid var(--edge);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;font-family:var(--serif);font-size:14px;letter-spacing:.08em;
+  background:linear-gradient(165deg,#241D2F,#15111E);animation:flip .45s backwards}
+.rc.w{color:var(--rose)} .rc.r{color:var(--blood)} .rc.g{color:var(--ash)}
+@keyframes flip{from{opacity:0;transform:rotateY(90deg)}to{opacity:1;transform:none}}
+.verdict{text-align:center;font-family:var(--serif);font-size:24px;letter-spacing:.18em;margin:8px 0}
+.center{text-align:center}
+.muted{color:var(--ash);font-size:13px;line-height:1.7}
+.tiny{color:var(--dim);font-size:11.5px;line-height:1.7}
+.status{text-align:center;font-family:var(--serif);font-size:17px;letter-spacing:.12em;margin:6px 0 4px;color:var(--bone)}
+.sheet{position:fixed;inset:0;background:rgba(8,6,12,.9);backdrop-filter:blur(6px);z-index:50;
+  overflow-y:auto;padding:26px 16px 60px;-webkit-user-select:text;user-select:text}
+.sheet .inner{max-width:460px;margin:0 auto}
+.sheet h3{font-size:18px;letter-spacing:.16em;margin:20px 0 8px;color:var(--gold)}
+.sheet p,.sheet li{font-size:13.5px;color:#CFC7D8;line-height:1.85}
+.sheet ul,.sheet ol{padding-left:18px;margin:6px 0}
+.sheet code{font-family:var(--mono);font-size:12px;color:var(--gold)}
+.link{color:var(--gold);font-size:12px;letter-spacing:.14em;text-align:center;margin-top:16px;cursor:pointer}
+.qrwrap{display:flex;justify-content:center;margin-top:12px}
+.qrwrap #qr{background:#EDE7DC;padding:10px;border-radius:10px;line-height:0}
+.qrwrap #qr:empty{display:none}
+.invite{font-family:var(--mono);font-size:11px;color:var(--ash);word-break:break-all;text-align:center;margin-top:8px;-webkit-user-select:text;user-select:text}
+.stepper{display:flex;align-items:center;justify-content:space-between;background:#0E0C15;border:1px solid var(--edge);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:13.5px}
+.stepper .ctl{display:flex;align-items:center;gap:10px}
+.stepper button{width:34px;height:34px;padding:0;margin:0;font-size:18px}
+.stepper .v{font-family:var(--serif);font-size:20px;min-width:22px;text-align:center}
+.table-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:18px;align-items:start}
+.table-grid .board{margin-top:0}
+@media (max-width:760px){.table-grid{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="sheet"></div>
+
+<script>
+/* =====================================================================
+   联机配置
+   把 Firebase 控制台里「项目设置 → 你的应用 → SDK 设置和配置」中的
+   firebaseConfig 对象粘贴到这里，例如：
+   const FIREBASE_CONFIG = { apiKey:"...", authDomain:"...", databaseURL:"https://xxx.asia-southeast1.firebasedatabase.app", projectId:"...", appId:"..." };
+   留空 (null) 时，页面会让你在手机上粘贴一次配置，邀请链接会自动带上它。
+   ===================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBmZwp0F-3gjm8f0_My9YncTkp-HwNUDHQ",
+  authDomain: "blade-n-roses.firebaseapp.com",
+  // 在 Realtime Database 页面顶部能看到这个地址；如果你建库时选的不是新加坡，改成那里显示的地址
+  databaseURL: "https://blade-n-roses-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "blade-n-roses",
+  storageBucket: "blade-n-roses.firebasestorage.app",
+  messagingSenderId: "253257812508",
+  appId: "1:253257812508:web:361fee1712256677072dd9"
+};
+const SDK_VER = '10.14.1';
+const ROOT = 'brRooms';
+const HEARTBEAT_MS = 20000, OFFLINE_MS = 75000;
+
+/* ============ 数据 ============ */
+const ROLES={
+ rose:{n:'白蔷薇',camp:'w',mk:'✿',d:'你是仪式的核心。你的身份牌必须被安全献祭，白蔷薇阵营才可能获胜；一旦它被血刃命中，本局立刻落败。'},
+ bishop:{n:'司教',camp:'w',mk:'✞',d:'你引导信者走向祭坛。夜晚你与另外三人相认，但不知谁是同伴、谁是刀刃。'},
+ flower:{n:'信者',camp:'w',mk:'❀',d:'你什么也不知道。用花苞填满祭坛，并想办法让白蔷薇活着走完仪式。'},
+ greatblade:{n:'巨刃',camp:'r',mk:'†',d:'你混在相认的四人之中。只要有一张血刃牌落桌，当轮所有花苞都会被斩杀。'},
+ twinblade:{n:'双刃',camp:'r',mk:'‡',d:'你与巨刃在夜里彼此确认，也同时暴露在白蔷薇与司教眼前——四个人，两白两红。'},
+ darkblade:{n:'暗刃',camp:'r',mk:'☠',d:'你独自潜伏，夜晚不睁眼，谁也不认识你。你的牌同样能让整轮献祭化为血泊。'}
+};
+const CARDS={
+ rose:{n:'白蔷薇',camp:'w',mk:'✿',cap:'花苞'},
+ bishop:{n:'司教',camp:'w',mk:'✞',cap:'花苞'},
+ flower:{n:'信者',camp:'w',mk:'❀',cap:'花苞'},
+ greatblade:{n:'巨刃',camp:'r',mk:'†',cap:'血刃'},
+ twinblade:{n:'双刃',camp:'r',mk:'‡',cap:'血刃'},
+ darkblade:{n:'暗刃',camp:'r',mk:'☠',cap:'血刃'},
+ ghost:{n:'幽魂',camp:'g',mk:'☾',cap:'无效果'}
+};
+const EFF={
+ 1:{n:'净化之光',d:'本回合若没有血刃牌出现，献祭的花苞额外 +1。',t:0},
+ 2:{n:'亡魂低语',d:'指定 1 名玩家，他获得 1 张幽魂牌。',t:1},
+ 3:{n:'窥探之眼',d:'指定 1 名玩家，你私下看到他手中的 1 张随机牌。',t:1},
+ 4:{n:'圣光庇护',d:'你本回合必须出牌；你打出的牌不会被斩杀，被血刃命中时直接弃置。',t:0},
+ 5:{n:'加倍献祭',d:'本回合献祭成功的花苞数量翻倍。',t:0},
+ 6:{n:'血色标记',d:'指定 1 名玩家，公开他手中的 1 张随机牌，全场可见。',t:1},
+ 7:{n:'暗刃启示',d:'暗刃私下得知白蔷薇与司教两人的名字，但不知谁是谁。',t:0},
+ 8:{n:'信仰试炼',d:'指定 1 名玩家，他本回合必须出牌，不能停手。',t:1},
+ 9:{n:'圣鉴',d:'指定 1 名玩家，司教私下得知他属于哪个阵营。',t:1},
+ 10:{n:'净化仪式',d:'所有玩家各弃掉 1 张幽魂牌（若手中有）。',t:0},
+ 11:{n:'血刃狂宴',d:'本回合若出现血刃牌，斩杀的花苞额外 +1。',t:0},
+ 12:{n:'蔷薇预言',d:'白蔷薇私下得知 1 名随机血刃阵营玩家。',t:0}
+};
+const SETUP={
+ 5:['rose','bishop','flower','greatblade','twinblade'],
+ 6:['rose','bishop','flower','flower','greatblade','twinblade'],
+ 7:['rose','bishop','flower','flower','greatblade','twinblade','darkblade'],
+ 8:['rose','bishop','flower','flower','flower','greatblade','twinblade','darkblade'],
+ 9:['rose','bishop','flower','flower','flower','flower','greatblade','twinblade','darkblade'],
+ 10:['rose','bishop','flower','flower','flower','flower','greatblade','twinblade','darkblade','darkblade']
+};
+// 5 人局取自实体图板（献祭 ×3 / 斩杀 ×4）；其他人数为推算值，房主可在大厅调整
+const defTargets=n=>({sac:Math.max(2,n-2),kill:Math.max(3,n-1)});
+const tgtFor=(st,n)=>(st.tgt&&st.tgt.n===n)?{sac:st.tgt.sac,kill:st.tgt.kill}:defTargets(n);
+
+/* ============ 工具 ============ */
+const rid=()=>'p'+Math.random().toString(36).slice(2,10);
+const rcode=()=>{const A='ABCDEFGHJKLMNPQRSTUVWXYZ';let s='';for(let i=0;i<4;i++)s+=A[Math.floor(Math.random()*A.length)];return s};
+function shuf(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nameOf=(st,id)=>{const p=(st.players||[]).find(x=>x.id===id);return p?p.name:'？'};
+const clone=o=>o==null?o:JSON.parse(JSON.stringify(o));
+const ls={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+const b64e=s=>btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const b64d=s=>decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/'))));
+const ICON_P='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="7.5" r="4.5"/><path d="M3 21c0-4.4 4-7.5 9-7.5s9 3.1 9 7.5z"/></svg>';
+const ICON_ROSE='<svg viewBox="0 0 40 64" fill="none" stroke="#F7F3EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4c6 0 12 4 12 11 0 8-5 13-12 13S8 23 8 15C8 8 14 4 20 4z" fill="#F7F3EC" fill-opacity=".95"/><path d="M20 9c-4 0-6 3-5 6s5 4 8 2 2-6-1-7M10 13c3 1 5 4 5 7M30 12c-3 2-4 5-3 8" stroke="#2A2328" stroke-width="1.6"/><path d="M20 28c0 10-2 20-7 32M17 44c-5-1-9-4-10-8 5 0 9 2 10 8z"/><path d="M17 44c-5-1-9-4-10-8 5 0 9 2 10 8z" fill="#F7F3EC" fill-opacity=".8"/></svg>';
+const ICON_SWORD='<svg viewBox="0 0 40 64" fill="none" stroke="#F7F3EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M33 4L13 38l4 3L36 6z" fill="#F7F3EC" fill-opacity=".95"/><path d="M8 34l14 10M15 39l-8 14M5 50l5 5"/><circle cx="6" cy="54" r="2.4" fill="#F7F3EC"/></svg>';
+
+/* ============ 后端（Firebase Realtime Database） ============ */
+function parseConfig(txt){
+  if(!txt)return null;
+  try{const j=JSON.parse(txt);if(j&&j.apiKey){if(!j.databaseURL&&j.projectId)j.databaseURL=`https://${j.projectId}-default-rtdb.asia-southeast1.firebasedatabase.app`;return j}}catch(e){}
+  const o={};String(txt).replace(/([A-Za-z]+)\s*:\s*["'`]([^"'`]+)["'`]/g,(_,k,v)=>{o[k]=v});
+  if(!o.databaseURL&&o.projectId)o.databaseURL=`https://${o.projectId}-default-rtdb.asia-southeast1.firebasedatabase.app`;
+  return o.databaseURL&&o.apiKey?o:null;
+}
+function resolveConfig(){
+  if(FIREBASE_CONFIG&&FIREBASE_CONFIG.databaseURL)return{cfg:FIREBASE_CONFIG,src:'file'};
+  const m=location.hash.match(/cfg=([A-Za-z0-9_-]+)/);
+  if(m){try{const c=JSON.parse(b64d(m[1]));if(c.databaseURL){ls.set('br:cfg',c);return{cfg:c,src:'link'}}}catch(e){}}
+  const s=ls.get('br:cfg');if(s&&s.databaseURL)return{cfg:s,src:'local'};
+  return null;
+}
+async function firebaseBackend(cfg){
+  const base=`https://www.gstatic.com/firebasejs/${SDK_VER}/`;
+  const [A,U,D]=await Promise.all([import(base+'firebase-app.js'),import(base+'firebase-auth.js'),import(base+'firebase-database.js')]);
+  const app=A.initializeApp(cfg);
+  const auth=U.getAuth(app), db=D.getDatabase(app);
+  const user=await new Promise((res,rej)=>{
+    const un=U.onAuthStateChanged(auth,u=>{un();if(u)res(u);else U.signInAnonymously(auth).then(c=>res(c.user),rej)},rej);
+  });
+  let off=0;D.onValue(D.ref(db,'.info/serverTimeOffset'),s=>{off=s.val()||0});
+  return{
+    uid:user.uid,
+    get:async p=>(await D.get(D.ref(db,p))).val(),
+    on:(p,cb,err)=>D.onValue(D.ref(db,p),s=>cb(s.val()),e=>err&&err(e)),
+    update:patch=>D.update(D.ref(db),patch),
+    set:(p,v)=>D.set(D.ref(db,p),v),
+    TS:D.serverTimestamp(),
+    now:()=>Date.now()+off
+  };
+}
+let B=null;
+
+/* ============ 客户端状态 ============ */
+const S={code:null,uid:null,pid:null,name:'',spect:false,pub:null,seats:{},sec:null,joinAt:0,joinErr:'',subs:[],secSub:null,hb:null,seq:0,lastSig:'',kicked:''};
+const UI={screen:'boot',err:'',sel:null,confirm:null,sheet:null,hold:false,wait:false,cfgSrc:null,bootErr:''};
+const el=()=>document.getElementById('app');
+const R=()=>`${ROOT}/${S.code}`;
+const isHost=()=>!!(S.pub&&B&&S.pub.host===B.uid);
+const isOff=pid=>{const s=S.seats&&S.seats[pid];if(!s||!s.lastSeen)return true;return B.now()-s.lastSeen>OFFLINE_MS};
+
+function normPub(v){
+  if(!v)return null;
+  const st=Object.assign({players:[],round:0,maxRound:0,log:[],used:[],order:[],turn:0,acted:{},ready:{},hc:{},hist:[],
+    b:{sac:0,kill:0,roseSac:false},cfg:{sac:3,kill:4}},v);
+  st.b=Object.assign({sac:0,kill:0,roseSac:false},st.b);
+  st.hist=(st.hist||[]).map(h=>Object.assign({items:[],bonus:0},h));
+  if(st.lastR)st.lastR=Object.assign({cards:[],blades:0,text:''},st.lastR);
+  return st;
+}
+function normSec(v){if(!v)return null;return Object.assign({hand:[],notes:[],night:null},v)}
+
+/* ============ 渲染 ============ */
+function render(){
+  const st=S.pub;let h='';
+  el().classList.toggle('wide',UI.screen==='table');
+  if(UI.screen==='boot')h=`<div class="panel center muted" style="margin-top:30vh">${UI.bootErr?`<div class="err">${UI.bootErr}</div><button data-a="tosetup">重新设置联机配置</button>`:'正在连接…'}</div>`;
+  else if(UI.screen==='setup')h=vSetup();
+  else if(UI.screen==='home')h=vHome();
+  else if(!st)h=`<div class="panel center"><div class="muted">正在连接房间 ${esc(S.code||'')}…</div>${UI.err?`<div class="err">${esc(UI.err)}</div><button data-a="leave">返回</button>`:''}</div>`;
+  else if(UI.screen==='table')h=vTable(st);
+  else if(S.kicked)h=`<div class="panel center"><div class="muted">${esc(S.kicked)}</div><button data-a="leave">返回首页</button></div>`;
+  else if(!S.pid)h=vSeating(st);
+  else if(st.phase==='lobby')h=vLobby(st);
+  else if(st.phase==='night')h=vNight(st);
+  else if(st.phase==='over')h=vOver(st);
+  else h=vDay(st);
+  el().innerHTML=h;
+  document.getElementById('sheet').innerHTML=UI.sheet?vSheet():'';
+  bind();
+  if(st&&st.phase==='lobby'&&(UI.screen==='room'||UI.screen==='table'))drawQR();
+}
+function head(st){
+  return `<div class="eyebrow">房间 ${esc(st.code)} · ${st.players.length}人${st.round?` · 第 ${st.round}/${st.maxRound} 轮`:''}</div>`;
+}
+function hostBanner(st){
+  if(!S.pid||!st.hostPid||isHost())return '';
+  if(!isOff(st.hostPid))return '';
+  return `<div class="banner">房主 <b>${esc(nameOf(st,st.hostPid))}</b> 已离线超过 75 秒，游戏会卡住。任何在座玩家都可以接管房主继续这局（身份与手牌不会变）。
+    <button class="gold" data-a="takeover">接管房主</button></div>`;
+}
+
+/* ---------- 实体风格图板 ---------- */
+function board(st){
+  const n=st.players.length||5, slots=st.maxRound||n;
+  const hist=st.hist||[];
+  const cur=(st.phase&&!['lobby','night','over'].includes(st.phase))?st.round:0;
+  let s='';
+  for(let i=1;i<=slots;i++){
+    const hh=hist.find(x=>x.r===i);
+    if(hh)s+=`<div class="bd-slot used ${i===cur?'now':''}"><span class="rn">${i}</span><span class="cn">${hh.num}</span><span class="ow">${esc(nameOf(st,hh.owner))}</span></div>`;
+    else if(i===cur&&st.cry)s+=`<div class="bd-slot used now"><span class="rn">${i}</span><span class="cn">${st.cry.num}</span><span class="ow">${esc(nameOf(st,st.cry.owner))}</span></div>`;
+    else s+=`<div class="bd-slot ${i===cur?'now':''}">${i}</div>`;
+  }
+  const cfg=st.phase==='lobby'?tgtFor(st,n):st.cfg;
+  const stack=(side,target)=>{
+    const items=[];
+    hist.filter(x=>x.side===side).forEach(x=>{x.items.forEach(c=>items.push({c,r:x.r}));for(let k=0;k<x.bonus;k++)items.push({c:null,r:x.r})});
+    const total=Math.max(target,items.length);let t='';
+    for(let i=0;i<total;i++){
+      const it=items[i];
+      if(!it)t+=`<div class="bd-tile empty">·</div>`;
+      else if(!it.c)t+=`<div class="bd-tile fill bonus"><span class="mk">＋1</span>魔法加成<span class="rd">第${it.r}轮</span></div>`;
+      else{const C=CARDS[it.c];t+=`<div class="bd-tile fill"><span class="mk">${C.mk}</span>${C.n}<span class="rd">第${it.r}轮</span></div>`}
+    }
+    return {html:t,count:items.length};
+  };
+  const W=stack('w',cfg.sac),K=stack('r',cfg.kill);
+  const foot=st.phase==='lobby'?'等待仪式开始':
+    st.b.roseSac?'<b>✿ 白蔷薇已安全献祭</b>':(st.winner==='r'&&/白蔷薇/.test(st.reason||'')?'<span class="hit">白蔷薇被刀刃命中</span>':'白蔷薇尚未安全献祭 — 献祭数达标也无法获胜');
+  return `<div class="board" aria-label="图板">
+    <div class="bg"><div class="l"></div><div class="r"></div><div class="beam"></div></div>
+    <div class="fg">
+      <div class="bd-badge">${ICON_P}${n}</div>
+      <div class="bd-slots ${slots>7?'many':''}">${s}</div>
+      <div class="bd-halves">
+        <div class="bd-half w ${W.count>=cfg.sac?'done':''}"><div class="bd-goal">${ICON_ROSE}<span class="x">X</span>${cfg.sac}<span class="cnt">${W.count}/${cfg.sac}</span></div><div class="bd-stack">${W.html}</div></div>
+        <div class="bd-half r ${K.count>=cfg.kill?'done':''}"><div class="bd-goal">${ICON_SWORD}${ICON_ROSE}<span class="x">X</span>${cfg.kill}<span class="cnt">${K.count}/${cfg.kill}</span></div><div class="bd-stack">${K.html}</div></div>
+      </div>
+      <div class="bd-foot">${foot}</div>
+    </div></div>`;
+}
+function phaseText(st){
+  const N=id=>esc(nameOf(st,id));
+  if(st.phase==='lobby')return `聚集中 · ${st.players.length} 人`;
+  if(st.phase==='night'){const c=Object.keys(st.ready||{}).length;return `入夜 · 已就绪 ${c}/${st.players.length}`}
+  if(st.phase==='pick')return `${N(st.coin)} 正在挑选要翻开的白水晶`;
+  if(st.phase==='effect')return `等待 ${N(st.cry.owner)} 为「${EFF[st.cry.num].n}」指定目标`;
+  if(st.phase==='play'){const k=Object.values(st.acted||{}).filter(x=>x==='play').length;return `轮到 ${N(st.order[st.turn])} · 已有 ${k} 张牌落桌`}
+  if(st.phase==='reveal')return st.lastR&&st.lastR.blades>0?'刀 光 落 下':'花 苞 升 天';
+  if(st.phase==='over')return st.winner==='w'?'白蔷薇阵营获胜':'血刃阵营获胜';
+  return '';
+}
+
+/* ---------- 各页面 ---------- */
+function vSetup(){
+  return `<div class="eyebrow">首次设置 · 只需一次</div>
+  <h1 class="title">联机<span class="b">配置</span></h1>
+  <div class="sub">这个版本用 Firebase 实时数据库让每台手机同步，和 party-games 站点的做法一样。粘贴你的 Firebase Web 配置即可，之后发给朋友的邀请链接会自动带上，他们不用再设置。</div>
+  <div class="panel"><label>firebaseConfig</label>
+    <textarea id="cfgtxt" placeholder='const firebaseConfig = {&#10;  apiKey: "...",&#10;  authDomain: "...",&#10;  databaseURL: "https://...firebasedatabase.app",&#10;  projectId: "...",&#10;  appId: "..."&#10;};'></textarea>
+    <button class="primary" data-a="savecfg">保存并连接</button>
+    <div class="err">${esc(UI.err)}</div></div>
+  <div class="link" data-a="setuphelp">怎么拿到这段配置？</div>`;
+}
+function vHome(){
+  const last=ls.get('br:last');
+  return `<div class="eyebrow">隐藏身份 · 阵营推理 · 5–10 人</div>
+  <h1 class="title">血与刃的<br><span class="b">白蔷薇</span></h1>
+  <div class="sub">每人一台手机，同一个房间面对面玩。身份、手牌、私密情报只出现在各自的手机上；放一台平板在桌子中间当「图板」，所有人都能看到仪式进度。</div>
+  ${last&&last.code?`<div class="panel"><div class="muted">上次在房间 <b style="color:var(--gold);font-family:var(--mono)">${esc(last.code)}</b>（${esc(last.name)}）</div><button class="gold" data-a="resume">回到这个房间</button></div>`:''}
+  <div class="panel">
+    <label>你的名字</label><input id="nm" maxlength="8" placeholder="桌上叫你什么" value="${esc(S.name)}">
+    <button class="primary" data-a="create">开一间新房</button>
+    <div class="rule"></div>
+    <label>房间号</label><input id="cd" class="code" maxlength="4" placeholder="ABCD" value="${esc(UI.prefill||'')}">
+    <div class="row" style="margin-top:10px"><button data-a="join">加入房间</button><button class="ghost" data-a="spectate">桌面图板</button></div>
+    <div class="tiny" style="margin-top:8px">「桌面图板」不占座位，只显示公开进度，适合放在桌子中央的平板或电视上。</div>
+    <div class="err">${esc(UI.err)}</div>
+  </div>
+  <div class="link" data-a="rules">查看规则</div>
+  ${UI.cfgSrc!=='file'?'<div class="link" data-a="tosetup" style="margin-top:8px;color:var(--dim)">更换联机配置</div>':''}`;
+}
+function vSeating(st){
+  const off=st.hostPid&&isOff(st.hostPid);
+  return `${head(st)}<div class="panel center">
+    ${S.joinErr?`<div class="err">${esc(S.joinErr)}</div><button data-a="leave">返回</button>`:
+    `<div class="muted">正在入座…</div>${off?'<div class="tiny" style="margin-top:8px">房主目前离线，等房主回来后会自动入座。</div>':''}`}
+  </div>`;
+}
+// 二维码/邀请链接必须指向线上网址；本地双击打开(file://)时也用线上地址，扫码的人才能打开
+const PUBLIC_URL='https://zelinnnnn.github.io/knife-whitein-redout/';
+function inviteUrl(){
+  const u=new URL(/^https?:$/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.href:PUBLIC_URL);u.search='';u.hash='';u.searchParams.set('room',S.code);
+  let s=u.toString();
+  if(UI.cfgSrc!=='file'&&window.__CFG)s+='#cfg='+b64e(JSON.stringify(window.__CFG));
+  return s;
+}
+let qrLoading=false;
+function drawQR(){
+  const box=document.getElementById('qr');if(!box)return;
+  const go=()=>{try{box.innerHTML='';new QRCode(box,{text:inviteUrl(),width:156,height:156,colorDark:'#12101A',colorLight:'#EDE7DC',correctLevel:QRCode.CorrectLevel.L})}catch(e){}};
+  if(window.QRCode)return go();
+  if(qrLoading)return;qrLoading=true;
+  const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+  sc.onload=()=>{const b=document.getElementById('qr');if(b)drawQR()};document.head.appendChild(sc);
+}
+function vLobby(st){
+  const n=st.players.length, ok=n>=5&&n<=10, host=isHost(), T=tgtFor(st,n);
+  return `${head(st)}<h1 class="title">聚 集</h1>${hostBanner(st)}
+  <div class="panel"><div class="tiny center">扫码或输入房间号加入</div><div class="code-big">${esc(st.code)}</div>
+    <div class="qrwrap"><div id="qr"></div></div>
+    <div class="row" style="margin-top:12px"><button class="small ghost" style="flex:1" data-a="copylink">复制邀请链接</button>${navigator.share?'<button class="small ghost" style="flex:1" data-a="share">分享</button>':''}</div>
+    <div class="err" style="color:var(--live);text-align:center">${esc(UI.flash||'')}</div></div>
+  <div class="panel">
+    <div class="eyebrow">在场 ${n} 人</div>
+    <div class="plist">${st.players.map((p,i)=>`<div class="pl"><span class="seat">${i+1}</span><span class="dot ${isOff(p.id)?'off':''}"></span>
+      <span class="nm">${esc(p.name)}${p.id===S.pid?' · 你':''}</span>
+      ${p.id===st.hostPid?'<span class="tag">房主</span>':''}
+      ${host&&p.id!==S.pid?`<button class="small ghost" data-a="kick" data-id="${p.id}">移出</button>`:''}</div>`).join('')}</div>
+  </div>
+  ${host?`<div class="panel">
+    <div class="eyebrow">本局配置</div>
+    <div class="muted">${ok?`${n} 人：${campLine(n)}<br>共 ${n} 轮，每人的白水晶各翻开一次。`:'需要 5–10 人才能开始。'}</div>
+    ${ok?`<div class="stepper"><span>白方需献祭花苞</span><span class="ctl"><button data-a="tgt" data-k="sac" data-d="-1">−</button><span class="v">${T.sac}</span><button data-a="tgt" data-k="sac" data-d="1">＋</button></span></div>
+    <div class="stepper"><span>红方斩杀花苞即胜</span><span class="ctl"><button data-a="tgt" data-k="kill" data-d="-1">−</button><span class="v">${T.kill}</span><button data-a="tgt" data-k="kill" data-d="1">＋</button></span></div>`:''}
+    <button class="primary" data-a="start" ${ok?'':'disabled'}>开始仪式</button></div>`
+   :`<div class="panel center muted">等房主开始<br><span class="tiny">目标：献祭 ${T.sac} · 斩杀 ${T.kill}</span><button class="ghost" data-a="leaveroom">离开房间</button></div>`}
+  <div class="link" data-a="rules">查看规则</div>`;
+}
+function campLine(n){
+  const c={};SETUP[n].forEach(r=>c[r]=(c[r]||0)+1);
+  return Object.keys(c).map(k=>`${ROLES[k].n}${c[k]>1?'×'+c[k]:''}`).join('、');
+}
+function idCard(role){
+  const R=ROLES[role];
+  return `<div class="idcard ${UI.hold?'open':''}" id="idc">
+    <div class="idname ${R.camp==='w'?'w-txt':'r-txt'}">${R.mk} ${R.n}</div>
+    <div class="idcamp ${R.camp==='w'?'w-txt':'r-txt'}">${R.camp==='w'?'白蔷薇阵营':'血刃阵营'}</div>
+    <div class="desc">${R.d}</div>
+    <div class="veil"><div class="lock">按 住 显 形</div><div class="hint">松手即隐去</div></div>
+  </div>`;
+}
+function vNight(st){
+  if(!S.sec)return `${head(st)}<div class="panel center muted">正在发牌…</div>`;
+  const ready=st.ready&&st.ready[S.pid];
+  const cnt=Object.keys(st.ready||{}).length;
+  const offUnready=st.players.filter(p=>!st.ready[p.id]&&isOff(p.id));
+  return `${head(st)}<h1 class="title">入 夜</h1>${hostBanner(st)}
+  <div class="sub">四个人在黑暗里睁开了眼——两朵蔷薇，两把刀。</div>
+  ${idCard(S.sec.role)}
+  ${S.sec.night?`<div class="note"><b>相认名单</b><br>${S.sec.night.map(esc).join('、')}<br>
+    <span style="color:var(--ash)">这四人中两人属白、两人属红，包括你在内。谁是谁，得靠今晚剩下的时间去猜。</span></div>`
+   :`<div class="note">你没有睁眼。除了自己的手牌，你一无所知。</div>`}
+  <div class="panel"><div class="eyebrow">你的白水晶</div>
+    <div class="muted">编号 <b style="color:var(--sanct);font-size:18px">${S.sec.crystal}</b> — <b>${EFF[S.sec.crystal].n}</b><br>${EFF[S.sec.crystal].d}</div>
+    <div class="tiny" style="margin-top:8px">被奉献硬币持有者选中时，这枚水晶会公开并强制发动。</div></div>
+  <div class="panel"><div class="eyebrow">手牌 ${S.sec.hand.length} 张</div>${hand(S.sec.hand,false)}</div>
+  <button class="primary" data-a="ready" ${ready||UI.wait?'disabled':''}>${ready?`已就绪（${cnt}/${st.players.length}）`:'我记住了'}</button>
+  ${isHost()&&offUnready.length?`<button class="ghost" data-a="skipready">${offUnready.map(p=>esc(p.name)).join('、')} 离线 · 不等了，直接天亮</button>`:''}
+  <div class="link" data-a="rules">查看规则</div>`;
+}
+function hand(h,pick){
+  return `<div class="hand">${h.map((c,i)=>{const C=CARDS[c];
+    return `<div class="card ${C.camp} ${UI.sel===i?'sel':''}" ${pick?`data-a="pickcard" data-i="${i}"`:''}>
+      <div class="mk">${C.mk}</div><div>${C.n}</div><div class="cap">${C.cap}</div></div>`}).join('')}
+    ${h.length===0?'<div class="muted" style="padding:20px 0">手牌已空</div>':''}</div>`;
+}
+function proxyBtn(st,actor){
+  if(!isHost()||!actor||actor===S.pid||!isOff(actor))return '';
+  const what=st.phase==='pick'?'随机替他选人':st.phase==='effect'?'随机替他指定':'替他停手';
+  return `<button class="ghost" data-a="proxy">${esc(nameOf(st,actor))} 离线 · ${what}</button>`;
+}
+function vDay(st){
+  let h=head(st)+hostBanner(st)+board(st);
+  const coinN=nameOf(st,st.coin);
+  h+=`<div class="panel" style="padding:12px 16px"><div class="muted"><span class="tag coin">硬币</span> ${esc(coinN)}${st.coin===S.pid?' · 你':''} 持有奉献硬币，由他开启本回合。</div></div>`;
+
+  if(st.phase==='pick'){
+    h+=`<h2 class="title" style="font-size:22px">翻 开 水 晶</h2>`;
+    if(st.coin===S.pid){
+      const cand=st.players.filter(p=>!st.used.includes(p.id));
+      h+=`<div class="muted" style="margin-top:8px">选 1 名尚未用过水晶的玩家，强制翻开他的白水晶。</div>
+      <div class="pick">${cand.map(p=>`<button data-a="pick" data-id="${p.id}" ${UI.wait?'disabled':''}>${esc(p.name)}${p.id===S.pid?'（你）':''}</button>`).join('')}</div>`;
+    }else h+=`<div class="panel center muted">等待 ${esc(coinN)} 选人…</div>${proxyBtn(st,st.coin)}`;
+  }
+  if(st.phase==='effect'||st.phase==='play'||st.phase==='reveal'){
+    const E=EFF[st.cry.num];
+    h+=`<div class="crystal"><div class="num">${st.cry.num}</div><div class="nm">${E.n}</div>
+      <div class="ds">${E.d}</div><div class="tiny" style="margin-top:8px">来自 ${esc(nameOf(st,st.cry.owner))} 的白水晶</div></div>`;
+  }
+  if(st.phase==='effect'){
+    if(st.cry.owner===S.pid){
+      h+=`<div class="muted" style="margin-top:12px">选择目标：</div>
+      <div class="pick">${st.players.map(p=>`<button data-a="target" data-id="${p.id}" ${UI.wait?'disabled':''}>${esc(p.name)}${p.id===S.pid?'（你）':''}</button>`).join('')}</div>`;
+    }else h+=`<div class="panel center muted">等待 ${esc(nameOf(st,st.cry.owner))} 指定目标…</div>${proxyBtn(st,st.cry.owner)}`;
+  }
+  if(st.phase==='play'){
+    const cur=st.order[st.turn];
+    if(cur===S.pid&&S.sec){
+      const must=(st.force===S.pid)&&S.sec.hand.length>0;
+      h+=`<div class="panel" style="border-color:var(--blood-d)"><div class="eyebrow" style="color:var(--blood)">轮到你${must?' · 必须出牌':''}</div>
+        ${hand(S.sec.hand,!UI.wait)}
+        ${UI.confirm!==null&&S.sec.hand[UI.confirm]?`<div class="center" style="font-family:var(--serif);font-size:18px;letter-spacing:.12em;margin-top:14px">打出「${CARDS[S.sec.hand[UI.confirm]].n}」？</div>
+          <div class="row" style="margin-top:10px"><button data-a="cancel" class="ghost">再想想</button><button class="gold" data-a="playcard">确认打出</button></div>`:
+          `<div class="tiny" style="margin-top:10px">点一张牌打出。打出的牌会与其他人的牌混洗后一起翻开，没人知道哪张是谁的。</div>
+          ${must?'':`<button class="ghost" data-a="pass" ${UI.wait?'disabled':''}>停手（不出牌）</button>`}`}</div>`;
+    }else h+=`<div class="panel center muted">等待 ${esc(nameOf(st,cur))} 出牌…</div>${proxyBtn(st,cur)}`;
+    h+=`<div class="panel"><div class="eyebrow">出牌 · 顺时针</div><div class="plist">${st.order.map(id=>{
+      const a=st.acted[id];
+      const t=a==='play'?'<span class="tag ok">已出牌</span>':a==='pass'?'<span class="tag done">停手</span>':
+        id===cur?'<span class="tag turn">思考中</span>':'<span class="tag">等待</span>';
+      return `<div class="pl"><span class="dot ${isOff(id)?'off':''}"></span><span class="nm">${esc(nameOf(st,id))}${id===S.pid?' · 你':''}</span>
+        <span class="tag">${st.hc[id]||0}张</span>${t}</div>`}).join('')}</div></div>`;
+  }
+  if(st.phase==='reveal'){
+    const r=st.lastR;
+    h+=`<div class="verdict ${r.blades>0?'r-txt':'w-txt'}">${r.blades>0?'刀 光 落 下':'花 苞 升 天'}</div>
+    <div class="reveal">${revealCards(r)}</div>
+    <div class="center muted">${esc(r.text)}</div>
+    <button class="primary" data-a="next" ${UI.wait?'disabled':''}>继续</button>`;
+  }
+  if(S.sec&&st.phase!=='play'){
+    h+=`<div class="panel"><div class="eyebrow">我的手牌（仅你可见）</div><div class="hand mini">${S.sec.hand.map(c=>{const C=CARDS[c];return `<div class="card ${C.camp}"><div class="mk">${C.mk}</div><div>${C.n}</div></div>`}).join('')||'<div class="muted">手牌已空</div>'}</div>
+      <div class="tiny" style="margin-top:8px">身份：按住下方卡片查看</div>${idCard(S.sec.role)}</div>`;
+  }
+  h+=notes()+logbox(st);
+  h+=`<div class="link" data-a="rules">查看规则</div>`;
+  return h;
+}
+function revealCards(r){
+  return r.cards.map((c,i)=>{const C=CARDS[c];
+    return `<div class="rc ${C.camp}" style="animation-delay:${i*90}ms"><div style="font-size:19px">${C.mk}</div>${C.n}</div>`}).join('')||'<div class="muted">无人出牌</div>';
+}
+function notes(){
+  if(!S.sec||!S.sec.notes||!S.sec.notes.length)return '';
+  return `<div class="panel"><div class="eyebrow">只有你能看到的情报</div>
+   ${S.sec.notes.slice().reverse().map(n=>`<div class="note">${n}</div>`).join('')}</div>`;
+}
+function logbox(st){
+  if(!st.log||!st.log.length)return '';
+  return `<div class="panel"><div class="eyebrow">祭典记录</div>
+   <div class="logbox">${st.log.slice().reverse().map(l=>`<div>${l}</div>`).join('')}</div></div>`;
+}
+function identities(st){
+  return `<div class="panel"><div class="eyebrow">身份公开</div><div class="plist">${st.players.map(p=>{
+    const r=ROLES[(st.reveal||{})[p.id]]||{n:'？',camp:'g',mk:'?'};
+    return `<div class="pl"><span class="nm">${esc(p.name)}</span>
+      <span class="tag ${r.camp==='w'?'ok':''}" style="${r.camp==='r'?'color:var(--blood);border-color:var(--blood-d)':''}">${r.mk} ${r.n}</span></div>`}).join('')}</div></div>`;
+}
+function vOver(st){
+  const w=st.winner==='w';
+  return `${head(st)}${hostBanner(st)}<h1 class="title" style="font-size:26px">${w?'<span class="w-txt">白蔷薇阵营获胜</span>':'<span class="b">血刃阵营获胜</span>'}</h1>
+  <div class="sub">${esc(st.reason)}</div>${board(st)}
+  ${identities(st)}
+  ${logbox(st)}
+  ${isHost()?'<button class="primary" data-a="again">再来一局（同样的人）</button>':'<div class="panel center muted">等房主再开一局</div>'}
+  <div class="link" data-a="rules">查看规则</div>`;
+}
+function vTable(st){
+  let side='';
+  if(st.phase==='lobby'){
+    side=`<div class="panel"><div class="tiny center">扫码加入</div><div class="code-big">${esc(st.code)}</div><div class="qrwrap"><div id="qr"></div></div>
+      <div class="eyebrow" style="margin-top:14px">在场 ${st.players.length} 人</div><div class="plist">${st.players.map(p=>`<div class="pl"><span class="dot ${isOff(p.id)?'off':''}"></span><span class="nm">${esc(p.name)}</span></div>`).join('')}</div></div>`;
+  }else{
+    if(st.cry&&['effect','play','reveal'].includes(st.phase)){const E=EFF[st.cry.num];
+      side+=`<div class="crystal"><div class="num">${st.cry.num}</div><div class="nm">${E.n}</div><div class="ds">${E.d}</div></div>`}
+    if(st.phase==='reveal'&&st.lastR)side+=`<div class="reveal">${revealCards(st.lastR)}</div><div class="center muted">${esc(st.lastR.text)}</div>`;
+    if(st.phase==='play')side+=`<div class="panel"><div class="eyebrow">出牌 · 顺时针</div><div class="plist">${st.order.map(id=>{const a=st.acted[id];
+      return `<div class="pl"><span class="nm">${esc(nameOf(st,id))}</span><span class="tag">${st.hc[id]||0}张</span>${a==='play'?'<span class="tag ok">已出牌</span>':a==='pass'?'<span class="tag done">停手</span>':id===st.order[st.turn]?'<span class="tag turn">思考中</span>':'<span class="tag">等待</span>'}</div>`}).join('')}</div></div>`;
+    if(st.phase==='over')side+=`<div class="sub center">${esc(st.reason)}</div>`+identities(st);
+    side+=logbox(st);
+  }
+  return `<div class="eyebrow">桌面图板 · 房间 ${esc(st.code)}${st.round?` · 第 ${st.round}/${st.maxRound} 轮`:''}</div>
+  <div class="status">${phaseText(st)}</div>
+  <div class="table-grid"><div>${board(st)}${st.coin&&st.phase!=='lobby'&&st.phase!=='over'?`<div class="center muted"><span class="tag coin">硬币</span> ${esc(nameOf(st,st.coin))}</div>`:''}</div><div>${side}</div></div>
+  <div class="link" data-a="leave">离开图板</div>`;
+}
+function vSheet(){
+  if(UI.sheet==='setup')return `<div class="sheet"><div class="inner">
+  <h1 class="title" style="font-size:24px">联机设置</h1>
+  <p>全程免费（Firebase Spark 免费档足够几十人同时玩）。只需房主做一次。</p>
+  <ol>
+   <li>打开 <code>console.firebase.google.com</code> → 添加项目（可关闭 Google Analytics）。</li>
+   <li>项目概览 → 点 <code>&lt;/&gt;</code> 添加 Web 应用 → 复制 <code>firebaseConfig</code>。</li>
+   <li>左侧「构建 → Realtime Database」→ 创建数据库，位置选 <code>asia-southeast1（新加坡）</code>，先选「锁定模式」。</li>
+   <li>「构建 → Authentication」→ 开始 → 登录方法 → 启用 <code>匿名</code>。</li>
+   <li>回到 Realtime Database →「规则」→ 粘贴随附的 <code>database.rules.json</code> 全部内容 → 发布。这些规则让每个人只能读到自己的身份和手牌。</li>
+   <li>把 firebaseConfig 粘贴到本页（或写进 HTML 顶部的 <code>FIREBASE_CONFIG</code> 再上传到 GitHub Pages / Netlify）。</li>
+  </ol>
+  <p>如果 firebaseConfig 里没有 <code>databaseURL</code>，在 Realtime Database 页面顶部复制那串 <code>https://…firebasedatabase.app</code> 地址补进去。</p>
+  <button data-a="closesheet">关闭</button></div></div>`;
+  return `<div class="sheet"><div class="inner">
+  <h1 class="title" style="font-size:24px">规 则</h1>
+  <h3>阵营与胜利</h3>
+  <p><b>白蔷薇阵营</b>（白蔷薇 / 司教 / 信者）：在有限的回合内，让白蔷薇的身份牌<b>安全献祭</b>不被斩杀，并把足够数量的花苞送上祭坛（图板左侧）。</p>
+  <p><b>血刃阵营</b>（巨刃 / 双刃 / 暗刃）：白蔷薇牌与血刃牌同时落桌即立刻获胜；或斩杀足够数量的花苞（图板右侧）；或撑到所有白水晶用完，白方仍未达标。</p>
+  <h3>夜晚</h3>
+  <p>白蔷薇、司教、巨刃、双刃互相确认——四个人彼此看见，但不知道谁是谁。暗刃与信者不睁眼。</p>
+  <h3>每一回合</h3>
+  <ul><li>奉献硬币的持有者，指定一名尚未用过水晶的玩家。</li>
+  <li>那枚白水晶公开翻开（图板上方的回合格），强制发动对应编号的魔法，不能放弃。</li>
+  <li>从硬币持有者开始，顺时针依次决定：打出 1 张牌，或停手。所有人都看得见谁出了牌、谁没出，但看不见出的是什么。</li>
+  <li>所有打出的牌混洗后一起翻开。只要出现<b>任意一张血刃牌</b>，本轮所有花苞被斩杀（放到图板右侧）；一张血刃牌都没有，则全部献祭成功（放到图板左侧）。幽魂牌不产生任何效果，只是烟雾。</li>
+  <li>硬币传给下一位还有水晶的玩家。所有水晶用完，仪式结束。</li></ul>
+  <h3>手牌</h3>
+  <p>每人 3 张：你的<b>身份牌</b>、1 张<b>信者牌</b>、1 张<b>幽魂牌</b>。红方手里也有信者牌——打出去能博取信任，但真的会帮白方填满祭坛。</p>
+  <h3>白水晶魔法书</h3>
+  <p>${Object.keys(EFF).map(k=>`<b>${k} ${EFF[k].n}</b>　${EFF[k].d}`).join('<br>')}</p>
+  <h3>掉线与换手机</h3>
+  <p>刷新或重开页面会自动回到座位。换了手机就用<b>原来的名字</b>加入同一房间，旧设备离线 75 秒后座位会转到新手机。房主掉线时，其他玩家可以「接管房主」继续这局。</p>
+  <h3>与实体版的差异</h3>
+  <p>省略了双刃的换牌动作与骰子。5 人局的目标（献祭 ×3、斩杀 ×4）照实体图板；其他人数是推算值，房主可在大厅调整。</p>
+  <button data-a="closesheet">关闭</button>
+  </div></div>`;
+}
+
+/* ============ 交互 ============ */
+function bind(){
+  document.querySelectorAll('[data-a]').forEach(n=>n.onclick=e=>{e.stopPropagation();go(n.dataset.a,n.dataset)});
+  const c=document.getElementById('idc');
+  if(c){
+    const on=()=>{UI.hold=true;c.classList.add('open')},off=()=>{UI.hold=false;c.classList.remove('open')};
+    c.addEventListener('pointerdown',e=>{e.preventDefault();on()});
+    ['pointerup','pointercancel','pointerleave'].forEach(t=>c.addEventListener(t,off));
+    c.addEventListener('contextmenu',e=>e.preventDefault());
+  }
+}
+let busy=false;
+async function go(a,d){
+  if(a==='rules'){UI.sheet='rules';render();return}
+  if(a==='setuphelp'){UI.sheet='setup';render();return}
+  if(a==='closesheet'){UI.sheet=null;render();return}
+  if(a==='tosetup'){UI.screen='setup';UI.err='';render();return}
+  if(a==='savecfg')return saveCfg();
+  if(a==='cancel'){UI.confirm=null;UI.sel=null;render();return}
+  if(a==='pickcard'){UI.sel=+d.i;UI.confirm=+d.i;render();return}
+  if(a==='copylink'){try{await navigator.clipboard.writeText(inviteUrl());flash('已复制')}catch(e){flash('复制失败，请长按二维码下方链接')}return}
+  if(a==='share'){try{await navigator.share({title:'血与刃的白蔷薇',text:`房间 ${S.code}`,url:inviteUrl()})}catch(e){}return}
+  if(busy&&['create','join','spectate','resume'].includes(a))return;
+  if(a==='create')return createRoom();
+  if(a==='join')return joinRoom(false);
+  if(a==='spectate')return joinRoom(true);
+  if(a==='resume'){const l=ls.get('br:last');S.name=l.name;return enterRoom(l.code,false)}
+  if(a==='leave')return leave();
+  if(a==='takeover')return takeover();
+  if(a==='ready')return act('ready');
+  if(a==='skipready')return act('skipready');
+  if(a==='start')return act('start');
+  if(a==='tgt')return act('tgt',{k:d.k,d:+d.d});
+  if(a==='kick')return act('kick',{id:d.id});
+  if(a==='leaveroom'){await act('leave');return leave()}
+  if(a==='pick')return act('pick',{id:d.id});
+  if(a==='target')return act('target',{id:d.id});
+  if(a==='pass')return act('play',{i:-1});
+  if(a==='playcard'){const i=UI.confirm;UI.confirm=null;UI.sel=null;return act('play',{i})}
+  if(a==='next')return act('next');
+  if(a==='again')return act('again');
+  if(a==='proxy')return act('proxy');
+}
+function flash(t){UI.flash=t;render();setTimeout(()=>{UI.flash='';render()},1800)}
+let waitT=null;
+async function act(type,payload){
+  if(!S.pub||!S.pid)return;
+  wakeLock();
+  UI.wait=true;clearTimeout(waitT);waitT=setTimeout(()=>{UI.wait=false;render()},5000);render();
+  if(isHost()){enqueue(()=>{handle(S.pid,type,payload||{});return commit()});return}
+  S.seq=Math.max(Date.now(),S.seq+1);
+  try{await B.set(`${R()}/actions/${B.uid}`,{seq:S.seq,type,payload:payload||{}})}
+  catch(e){UI.wait=false;UI.err='发送失败：'+(e.message||e);render()}
+}
+
+/* ============ 建/入房 ============ */
+function readName(){const v=(document.getElementById('nm')||{}).value||'';return v.trim().slice(0,8)}
+async function createRoom(){
+  const nm=readName();if(!nm){UI.err='先写个名字。';render();return}
+  busy=true;S.name=nm;UI.err='';
+  try{
+    let code=rcode();
+    for(let i=0;i<6;i++){if(!(await B.get(`${ROOT}/${code}/pub`)))break;code=rcode()}
+    const pid=rid();
+    const pub={code,host:B.uid,hostPid:pid,phase:'lobby',players:[{id:pid,name:nm}],round:0,maxRound:0,
+      cfg:defTargets(5),b:{sac:0,kill:0,roseSac:false},created:B.TS};
+    await B.update({[`${ROOT}/${code}/pub`]:pub,[`${ROOT}/${code}/seats/${pid}`]:{uid:B.uid,name:nm,lastSeen:B.TS},
+      [`${ROOT}/${code}/hidden`]:{created:B.TS}});
+    busy=false;await enterRoom(code,false);
+  }catch(e){busy=false;UI.err='开房失败：'+errText(e);render()}
+}
+async function joinRoom(spect){
+  const nm=readName();const cd=((document.getElementById('cd')||{}).value||'').trim().toUpperCase();
+  if(!spect&&!nm){UI.err='先写个名字。';render();return}
+  if(cd.length!==4){UI.err='房间号是 4 个字母。';render();return}
+  busy=true;UI.err='';S.name=nm;
+  try{
+    const pub=await B.get(`${ROOT}/${cd}/pub`);
+    if(!pub){UI.err='找不到这个房间，检查一下房号。';busy=false;render();return}
+    busy=false;await enterRoom(cd,spect);
+  }catch(e){busy=false;UI.err='加入失败：'+errText(e);render()}
+}
+function errText(e){
+  const m=String(e&&(e.code||e.message)||e);
+  if(/PERMISSION|permission/.test(m))return '数据库拒绝访问（检查数据库规则是否已发布、匿名登录是否已启用）';
+  return m;
+}
+async function enterRoom(code,spect){
+  unsubAll();
+  S.code=code;S.spect=spect;S.pub=null;S.seats={};S.sec=null;S.pid=null;S.joinErr='';S.kicked='';S.joinAt=0;
+  UI.screen=spect?'table':'room';UI.err='';
+  if(!spect)ls.set('br:last',{code,name:S.name});
+  history.replaceState(null,'',location.pathname+location.hash);
+  render();
+  let seatsLoaded=false;
+  S.subs.push(B.on(`${R()}/pub`,v=>{S.pub=normPub(v);UI.wait=false;
+    if(!v){UI.err='房间不存在或已关闭。'}
+    syncHost();refresh()},e=>{UI.err=errText(e);render()}));
+  S.subs.push(B.on(`${R()}/seats`,v=>{S.seats=v||{};
+    const prev=S.pid;
+    const mine=Object.keys(S.seats).find(k=>S.seats[k]&&S.seats[k].uid===B.uid)||null;
+    if(prev&&!mine&&!spect){
+      S.kicked=S.seats[prev]?'你的座位已在另一台设备上恢复。':'你已离开这个房间。';
+      ls.del('br:last');unsubSecret();stopHB();
+    }
+    S.pid=mine;
+    if(mine&&mine!==prev){S.joinErr='';subSecret();startHB()}
+    if(!seatsLoaded){seatsLoaded=true;if(!mine&&!spect)requestSeat()}
+    syncHost();refresh()}));
+  if(!spect){
+    S.subs.push(B.on(`${R()}/joins/${B.uid}`,v=>{
+      if(v&&v.err&&v.err.at===S.joinAt){S.joinErr=v.err.msg;refresh()}
+    }));
+  }
+}
+async function requestSeat(){
+  S.joinAt=Date.now();
+  try{await B.set(`${R()}/joins/${B.uid}`,{name:S.name,at:S.joinAt})}catch(e){S.joinErr=errText(e);refresh()}
+}
+function subSecret(){
+  unsubSecret();
+  S.secSub=B.on(`${R()}/secrets/${S.pid}`,v=>{S.sec=normSec(v);refresh()},()=>{});
+}
+function unsubSecret(){if(S.secSub){S.secSub();S.secSub=null}S.sec=null}
+function unsubAll(){S.subs.forEach(u=>{try{u()}catch(e){}});S.subs=[];unsubSecret();stopHB();dropHost()}
+function startHB(){
+  stopHB();
+  const touch=()=>{if(S.pid)B.set(`${R()}/seats/${S.pid}/lastSeen`,B.TS).catch(()=>{})};
+  touch();S.hb=setInterval(touch,HEARTBEAT_MS);
+  S.hbVis=()=>{if(document.visibilityState==='visible'){touch();wakeLock()}};
+  document.addEventListener('visibilitychange',S.hbVis);
+}
+function stopHB(){if(S.hb){clearInterval(S.hb);S.hb=null}if(S.hbVis){document.removeEventListener('visibilitychange',S.hbVis);S.hbVis=null}}
+function leave(){unsubAll();S.kicked='';S.pub=null;S.code=null;S.pid=null;UI.screen='home';UI.err='';
+  if(!S.spect)ls.del('br:last');render()}
+async function takeover(){
+  try{await B.update({[`${R()}/pub/host`]:B.uid,[`${R()}/pub/hostPid`]:S.pid})}
+  catch(e){UI.err='接管失败：'+errText(e);flash('接管失败，房主可能刚刚回来了')}
+}
+let wl=null;
+async function wakeLock(){try{if('wakeLock' in navigator&&(!wl||wl.released))wl=await navigator.wakeLock.request('screen')}catch(e){}}
+
+/* 只在内容变化时重绘；每 10 秒刷新一次在线状态 */
+let lastTurnKey='';
+function refresh(){
+  const st=S.pub;
+  const offs=st?st.players.map(p=>isOff(p.id)?1:0).join(''):'';
+  const sig=JSON.stringify(st)+JSON.stringify(S.sec)+S.pid+S.joinErr+S.kicked+offs+UI.err+UI.wait+UI.confirm;
+  if(sig===S.lastSig)return;S.lastSig=sig;
+  if(st&&S.pid){
+    const k=st.phase+':'+st.round+':'+((st.phase==='play'&&st.order[st.turn])||(st.phase==='pick'&&st.coin)||(st.phase==='effect'&&st.cry&&st.cry.owner)||'');
+    const mine=(st.phase==='play'&&st.order[st.turn]===S.pid)||(st.phase==='pick'&&st.coin===S.pid)||(st.phase==='effect'&&st.cry&&st.cry.owner===S.pid);
+    if(k!==lastTurnKey){lastTurnKey=k;if(mine&&navigator.vibrate)try{navigator.vibrate([60,40,60])}catch(e){}}
+  }
+  render();
+}
+setInterval(()=>{if(S.pub)refresh()},10000);
+
+/* =====================================================================
+   房主引擎：只有房主的手机运行规则，读写隐藏数据（身份分配、水晶、牌堆）
+   其他手机只发「动作」，房主处理后写回公开状态与各自的私密数据
+   ===================================================================== */
+let H=null, Q=Promise.resolve();
+const enqueue=f=>{Q=Q.then(f).catch(e=>console.error('[host]',e));return Q};
+function syncHost(){
+  if(!S.pub||S.spect)return;
+  if(isHost()&&!H)becomeHost();
+  else if(!isHost()&&H)dropHost();
+}
+function becomeHost(){
+  H={pub:null,hidden:null,sec:{},dirty:new Set(),extra:{},subs:[],ready:false};
+  const me=H;
+  enqueue(async()=>{
+    const [hidden,secrets]=await Promise.all([B.get(`${R()}/hidden`),B.get(`${R()}/secrets`)]);
+    if(H!==me)return;
+    me.hidden=Object.assign({assign:{},crystals:{},pile:[],aseen:{},jseen:{}},hidden||{});
+    me.hidden.pile=me.hidden.pile||[];
+    me.sec={};Object.keys(secrets||{}).forEach(k=>me.sec[k]=normSec(secrets[k]));
+    me.ready=true;
+    me.subs.push(B.on(`${R()}/joins`,v=>enqueue(()=>hostJoins(me,v||{}))));
+    me.subs.push(B.on(`${R()}/actions`,v=>enqueue(()=>hostActions(me,v||{}))));
+  });
+}
+function dropHost(){if(H){H.subs.forEach(u=>{try{u()}catch(e){}});H=null}}
+function hpub(){if(!H.pub)H.pub=normPub(clone(S.pub));return H.pub}
+async function commit(){
+  if(!H||!S.pub)return;
+  hpub();
+  const p={};
+  p[`${R()}/pub`]=clone(H.pub);
+  p[`${R()}/hidden`]=clone(H.hidden);
+  H.dirty.forEach(pid=>{p[`${R()}/secrets/${pid}`]=H.sec[pid]?clone(H.sec[pid]):null});
+  Object.assign(p,H.extra);
+  H.dirty=new Set();H.extra={};
+  S.pub=normPub(clone(H.pub));
+  H.pub=null;
+  UI.wait=false;refresh();
+  try{await B.update(p)}catch(e){console.error('[host commit]',e)}
+}
+async function hostJoins(me,joins){
+  if(H!==me||!me.ready)return;
+  let ch=false;
+  for(const uid of Object.keys(joins)){
+    const j=joins[uid];if(!j||!j.at||me.hidden.jseen[uid]===j.at)continue;
+    me.hidden.jseen[uid]=j.at;ch=true;
+    const st=hpub();
+    const seated=Object.keys(S.seats).find(k=>S.seats[k]&&S.seats[k].uid===uid);
+    if(seated)continue;
+    const nm=String(j.name||'玩家').slice(0,8);
+    const same=st.players.find(p=>p.name.trim().toLowerCase()===nm.trim().toLowerCase());
+    const err=msg=>{me.extra[`${R()}/joins/${uid}/err`]={at:j.at,msg}};
+    if(same){
+      if(isOff(same.id)){me.extra[`${R()}/seats/${same.id}/uid`]=uid;me.extra[`${R()}/seats/${same.id}/lastSeen`]=B.TS;
+        if(same.id===st.hostPid)st.host=uid;
+        st.log.push(`${esc(nm)} 换了一台设备回到座位`)}
+      else err(`「${nm}」这个名字已经有人在用了。如果是你换了手机，等旧设备离线 75 秒后再试。`);
+      continue;
+    }
+    if(st.phase!=='lobby'){err('这局已经开始了。断线重连请用原来的名字加入。');continue}
+    if(st.players.length>=10){err('房间已满（10 人）。');continue}
+    const pid=rid();
+    st.players.push({id:pid,name:nm});
+    me.extra[`${R()}/seats/${pid}`]={uid,name:nm,lastSeen:B.TS};
+  }
+  if(ch)await commit();
+}
+async function hostActions(me,acts){
+  if(H!==me||!me.ready)return;
+  let ch=false;
+  for(const uid of Object.keys(acts)){
+    const a=acts[uid];if(!a||!a.seq||(me.hidden.aseen[uid]||0)>=a.seq)continue;
+    me.hidden.aseen[uid]=a.seq;ch=true;
+    const pid=Object.keys(S.seats).find(k=>S.seats[k]&&S.seats[k].uid===uid);
+    if(!pid)continue;
+    try{handle(pid,a.type,a.payload||{})}catch(e){console.error(e)}
+  }
+  if(ch)await commit();
+}
+function secOf(pid){return H.sec[pid]||(H.sec[pid]={hand:[],notes:[]})}
+function setSec(pid,fn){const s=secOf(pid);fn(s);H.dirty.add(pid);H.pub.hc[pid]=(s.hand||[]).length}
+function note(pid,txt){setSec(pid,s=>{s.notes=s.notes||[];s.notes.push(`第${H.pub.round}轮 · ${txt}`)})}
+function log(t){H.pub.log.push(`第${H.pub.round}轮　${t}`)}
+const NN=id=>esc(nameOf(H.pub,id));
+
+function handle(pid,type,p){
+  if(!H||!H.ready)return;
+  const st=hpub();const host=pid===st.hostPid;
+  if(type==='ready'&&st.phase==='night'){st.ready[pid]=true;if(st.players.every(x=>st.ready[x.id]))beginRound()}
+  else if(type==='skipready'&&host&&st.phase==='night')beginRound();
+  else if(type==='start'&&host&&st.phase==='lobby')deal();
+  else if(type==='tgt'&&host&&st.phase==='lobby'){
+    const n=st.players.length,t=tgtFor(st,n);t[p.k]=Math.max(1,Math.min(20,(t[p.k]||0)+(p.d>0?1:-1)));st.tgt={n,sac:t.sac,kill:t.kill};
+  }
+  else if(type==='kick'&&host&&st.phase==='lobby'&&p.id!==st.hostPid)removeSeat(p.id);
+  else if(type==='leave'&&st.phase==='lobby'&&!host)removeSeat(pid);
+  else if(type==='pick'&&st.phase==='pick'&&pid===st.coin)revealCrystal(p.id);
+  else if(type==='target'&&st.phase==='effect'&&pid===st.cry.owner)applyEffect(p.id);
+  else if(type==='play'&&st.phase==='play'&&st.order[st.turn]===pid)doPlay(pid,+p.i);
+  else if(type==='next'&&st.phase==='reveal')afterReveal();
+  else if(type==='again'&&host&&st.phase==='over')reset();
+  else if(type==='proxy'&&host)proxy();
+}
+function removeSeat(id){
+  const st=H.pub;st.players=st.players.filter(x=>x.id!==id);
+  H.extra[`${R()}/seats/${id}`]=null;delete H.sec[id];H.dirty.add(id);
+}
+function proxy(){
+  const st=H.pub;
+  if(st.phase==='pick'&&isOff(st.coin)){const c=st.players.filter(p=>!st.used.includes(p.id));if(c.length)revealCrystal(c[Math.floor(Math.random()*c.length)].id)}
+  else if(st.phase==='effect'&&isOff(st.cry.owner)){applyEffect(st.players[Math.floor(Math.random()*st.players.length)].id)}
+  else if(st.phase==='play'){const cur=st.order[st.turn];if(!isOff(cur))return;
+    const s=secOf(cur);const must=st.force===cur&&s.hand.length>0;
+    log(`${NN(cur)} 离线，由房主代为${must?'出牌':'停手'}`);doPlay(cur,must?Math.floor(Math.random()*s.hand.length):-1)}
+}
+function deal(){
+  const st=H.pub,n=st.players.length;
+  if(n<5||n>10)return;
+  const roles=shuf(SETUP[n]),nums=shuf([1,2,3,4,5,6,7,8,9,10,11,12]).slice(0,n);
+  H.hidden.assign={};H.hidden.crystals={};
+  st.players.forEach((p,i)=>{H.hidden.assign[p.id]=roles[i];H.hidden.crystals[p.id]=nums[i]});
+  const FOUR=['rose','bishop','greatblade','twinblade'];
+  const fourNames=shuf(st.players.filter(p=>FOUR.includes(H.hidden.assign[p.id])).map(p=>p.name));
+  st.hc={};
+  st.players.forEach((p,i)=>{
+    const r=roles[i];
+    H.sec[p.id]={role:r,hand:[r,'flower','ghost'],crystal:nums[i],notes:[],night:FOUR.includes(r)?fourNames:null};
+    H.dirty.add(p.id);st.hc[p.id]=3;
+  });
+  st.cfg=tgtFor(st,n);st.maxRound=n;st.round=0;st.used=[];st.ready={};st.hist=[];st.cry=null;st.lastR=null;
+  st.b={sac:0,kill:0,roseSac:false};st.log=[];st.phase='night';st.winner=null;st.reason='';st.reveal=null;
+  st.coin=st.players[Math.floor(Math.random()*n)].id;
+  H.hidden.pile=[];
+}
+function beginRound(){
+  const st=H.pub;
+  st.round++;st.phase='pick';st.acted={};st.force=null;st.turn=0;st.lastR=null;st.cry=null;
+  H.hidden.pile=[];
+}
+function revealCrystal(target){
+  const st=H.pub;
+  if(!st.players.some(p=>p.id===target)||st.used.includes(target))return;
+  const num=H.hidden.crystals[target];
+  st.cry={owner:target,num};st.used.push(target);
+  log(`${NN(st.coin)} 选中 ${NN(target)}，翻开白水晶 ${num}「${EFF[num].n}」`);
+  if(EFF[num].t)st.phase='effect';else applyEffect(null);
+}
+function applyEffect(target){
+  const st=H.pub,num=st.cry.num,owner=st.cry.owner;
+  if(target&&!st.players.some(p=>p.id===target))return;
+  const roleOf=id=>H.hidden.assign[id];
+  const randCard=id=>{const h=secOf(id).hand||[];return h.length?h[Math.floor(Math.random()*h.length)]:null};
+  if(num===2&&target){setSec(target,s=>s.hand.push('ghost'));log(`${NN(target)} 获得 1 张幽魂牌`)}
+  if(num===3&&target){const c=randCard(target);
+    note(owner,c?`你窥探到 <b>${NN(target)}</b> 手中有一张 <b>${CARDS[c].n}</b>。`:`<b>${NN(target)}</b> 手中已无牌。`);
+    log(`${NN(owner)} 窥探了 ${NN(target)}`)}
+  if(num===6&&target){const c=randCard(target);
+    log(c?`公开：${NN(target)} 手中有一张「${CARDS[c].n}」`:`${NN(target)} 手中已无牌`)}
+  if(num===7){const d=st.players.find(p=>roleOf(p.id)==='darkblade');
+    if(d){const two=shuf(st.players.filter(p=>['rose','bishop'].includes(roleOf(p.id))).map(p=>esc(p.name)));
+      note(d.id,`启示：<b>${two.join('</b> 与 <b>')}</b> 分别是白蔷薇与司教（次序随机）。`);
+      log('暗刃收到了启示')}else log('场上没有暗刃，启示落空')}
+  if(num===8&&target){st.force=target;log(`${NN(target)} 本回合必须出牌`)}
+  if(num===9&&target){const b=st.players.find(p=>roleOf(p.id)==='bishop');
+    if(b){note(b.id,`圣鉴：<b>${NN(target)}</b> 属于 <b>${ROLES[roleOf(target)].camp==='w'?'白蔷薇阵营':'血刃阵营'}</b>。`);
+      log(`司教圣鉴了 ${NN(target)}`)}else log('场上没有司教，圣鉴落空')}
+  if(num===10){let c=0;for(const p of st.players){const s=secOf(p.id);
+      if(s.hand.includes('ghost')){setSec(p.id,x=>{x.hand.splice(x.hand.indexOf('ghost'),1)});c++}}
+    log(`净化仪式：${c} 张幽魂牌被弃置`)}
+  if(num===12){const w=st.players.find(p=>roleOf(p.id)==='rose');
+    const reds=st.players.filter(p=>ROLES[roleOf(p.id)].camp==='r');
+    if(w&&reds.length){const r=reds[Math.floor(Math.random()*reds.length)];
+      note(w.id,`预言：<b>${esc(r.name)}</b> 属于血刃阵营。`);log('白蔷薇得到了预言')}}
+  if(num===4)st.force=owner;
+  st.phase='play';
+  const idx=st.players.findIndex(p=>p.id===st.coin);
+  st.order=st.players.map((_,i)=>st.players[(idx+i)%st.players.length].id);
+  st.turn=0;st.acted={};
+  advance();
+}
+function advance(){
+  const st=H.pub;
+  while(st.turn<st.order.length){
+    const id=st.order[st.turn];
+    if((st.hc[id]||0)===0){st.acted[id]='pass';st.turn++;continue}
+    return;
+  }
+  doReveal();
+}
+function doPlay(pid,i){
+  const st=H.pub,s=secOf(pid);
+  const must=st.force===pid&&s.hand.length>0;
+  if(i<0){if(must)return;st.acted[pid]='pass'}
+  else{
+    if(!(i>=0&&i<s.hand.length))return;
+    const card=s.hand[i];
+    H.hidden.pile.push({o:pid,c:card});
+    setSec(pid,x=>x.hand.splice(i,1));
+    st.acted[pid]='play';
+  }
+  st.turn++;advance();
+}
+function doReveal(){
+  const st=H.pub;
+  const pile=shuf(H.hidden.pile||[]);
+  const blades=pile.filter(x=>CARDS[x.c].camp==='r').length;
+  const prot=st.cry.num===4?st.cry.owner:null;
+  let buds=0,roseHit=false,roseSafe=false,discarded=0;const items=[];
+  for(const x of pile){
+    if(CARDS[x.c].camp!=='w')continue;
+    if(blades>0){if(x.o===prot){discarded++;continue}buds++;items.push(x.c);if(x.c==='rose')roseHit=true}
+    else{buds++;items.push(x.c);if(x.c==='rose')roseSafe=true}
+  }
+  let text='',side='-',bonus=0;
+  if(blades>0){
+    if(st.cry.num===11&&buds>0)bonus=1;
+    st.b.kill+=buds+bonus;side=buds+bonus>0?'r':'-';
+    text=`${blades} 张血刃落桌，${buds+bonus} 朵花苞被斩杀。`+(bonus?'（血刃狂宴 +1）':'')+(discarded?`圣光庇护了 ${discarded} 张牌。`:'');
+  }else{
+    let g=buds;if(st.cry.num===1&&buds>0)g=buds+1;if(st.cry.num===5)g=g*2;
+    st.b.sac+=g;bonus=g-buds;side=g>0?'w':'-';
+    text=`没有血刃。${g} 朵花苞升上祭坛。`+(st.cry.num===1&&buds>0?'（净化之光 +1）':'')+(st.cry.num===5&&buds>0?'（加倍献祭）':'');
+    if(roseSafe)st.b.roseSac=true;
+  }
+  if(roseSafe)text+=' 白蔷薇安全落桌。';
+  if(roseHit)text+=' 白蔷薇被刀刃命中。';
+  st.hist.push({r:st.round,num:st.cry.num,owner:st.cry.owner,side,items,bonus});
+  st.lastR={cards:pile.map(x=>x.c),blades,text};
+  log(text);
+  st.phase='reveal';
+  H.hidden.pile=[];
+  if(roseHit)return end('r','刀刃在混乱中命中了白蔷薇，仪式在血泊里中止。');
+  if(st.b.kill>=st.cfg.kill)return end('r',`血池已满 —— ${st.b.kill} 朵花苞被斩杀，祭典无以为继。`);
+  if(st.b.roseSac&&st.b.sac>=st.cfg.sac)return end('w',`白蔷薇安然献出，${st.b.sac} 朵花苞点亮祭坛，母亲苏醒。`);
+}
+function afterReveal(){
+  const st=H.pub;
+  if(st.winner)return;
+  if(st.used.length>=st.players.length){
+    if(st.b.roseSac&&st.b.sac>=st.cfg.sac)return end('w','仪式在最后一刻完成。');
+    return end('r',`水晶耗尽，白蔷薇阵营只献祭了 ${st.b.sac} 朵花苞${st.b.roseSac?'':'，且白蔷薇始终未能安全落桌'}。`);
+  }
+  const idx=st.players.findIndex(p=>p.id===st.coin);
+  for(let i=1;i<=st.players.length;i++){
+    const c=st.players[(idx+i)%st.players.length];
+    if(!st.used.includes(c.id)){st.coin=c.id;break}
+  }
+  beginRound();
+}
+function end(w,reason){
+  const st=H.pub;st.winner=w;st.reason=reason;st.phase='over';st.reveal=clone(H.hidden.assign);
+  st.log.push(`—— ${w==='w'?'白蔷薇阵营获胜':'血刃阵营获胜'} ——`);
+}
+function reset(){
+  const st=H.pub;
+  st.phase='lobby';st.round=0;st.maxRound=0;st.b={sac:0,kill:0,roseSac:false};st.log=[];st.used=[];st.hist=[];
+  st.acted={};st.ready={};st.cry=null;st.lastR=null;st.winner=null;st.reason='';st.reveal=null;st.hc={};st.order=[];st.coin=null;st.force=null;
+  Object.keys(H.sec).forEach(k=>H.dirty.add(k));st.players.forEach(p=>H.dirty.add(p.id));H.sec={};
+  H.hidden.assign={};H.hidden.crystals={};H.hidden.pile=[];
+}
+
+/* ============ 启动 ============ */
+async function saveCfg(){
+  const c=parseConfig((document.getElementById('cfgtxt')||{}).value);
+  if(!c){UI.err='没认出配置。需要包含 apiKey 和 databaseURL。';render();return}
+  ls.set('br:cfg',c);UI.err='';location.hash='';location.reload();
+}
+async function boot(){
+  const q=new URLSearchParams(location.search);
+  UI.prefill=(q.get('room')||'').toUpperCase().slice(0,4);
+  const last=ls.get('br:last');if(last&&last.name)S.name=last.name;
+  render();
+  try{
+    if(window.__BR_BACKEND__){B=await window.__BR_BACKEND__();UI.cfgSrc='file'}
+    else{
+      const r=resolveConfig();
+      if(!r){UI.screen='setup';render();return}
+      window.__CFG=r.cfg;UI.cfgSrc=r.src;
+      B=await firebaseBackend(r.cfg);
+    }
+    S.uid=B.uid;
+  }catch(e){
+    const m=String(e&&(e.code||e.message)||e);
+    UI.bootErr=/operation-not-allowed|admin-restricted/.test(m)?'Firebase 还没启用「匿名登录」。在控制台 Authentication → 登录方法里启用后刷新。':
+      /api-key|invalid/.test(m)?'Firebase 配置无效：'+esc(m):'连接失败：'+esc(m);
+    render();return;
+  }
+  UI.screen='home';
+  if(last&&last.code&&!UI.prefill){S.name=last.name;return enterRoom(last.code,false)}
+  render();
+}
+boot();
+</script>
+</body>
+</html>
