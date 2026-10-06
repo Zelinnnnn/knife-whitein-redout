@@ -194,6 +194,7 @@ button.small{width:auto;padding:7px 12px;font-size:12.5px;margin:0}
 .table-grid .board{margin-top:0}
 @media (max-width:760px){.table-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.setup{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 10px}.setup th,.setup td{border:1px solid var(--edge);padding:5px 2px;text-align:center}.setup th{color:var(--ash);font-weight:500}
 </style>
 </head>
 <body>
@@ -225,11 +226,11 @@ const HEARTBEAT_MS = 20000, OFFLINE_MS = 75000;
 /* ============ 数据 ============ */
 const ROLES={
  rose:{n:'白蔷薇',camp:'w',mk:'✿',d:'你是仪式的核心。你的身份牌必须被安全献祭，白蔷薇阵营才可能获胜；一旦它被血刃命中，本局立刻落败。'},
- bishop:{n:'司教',camp:'w',mk:'✞',d:'你引导信者走向祭坛。夜晚你与另外三人相认，但不知谁是同伴、谁是刀刃。'},
+ bishop:{n:'司教',camp:'w',mk:'✞',d:'你引导信者走向祭坛。夜晚你与白蔷薇、双刃、巨刃一起睁眼相认，但不知谁是同伴、谁是刀刃。'},
  flower:{n:'信者',camp:'w',mk:'❀',d:'你什么也不知道。用花苞填满祭坛，并想办法让白蔷薇活着走完仪式。'},
- greatblade:{n:'巨刃',camp:'r',mk:'†',d:'你混在相认的四人之中。只要有一张血刃牌落桌，当轮所有花苞都会被斩杀。'},
- twinblade:{n:'双刃',camp:'r',mk:'‡',d:'你与巨刃在夜里彼此确认，也同时暴露在白蔷薇与司教眼前——四个人，两白两红。'},
- darkblade:{n:'暗刃',camp:'r',mk:'☠',d:'你独自潜伏，夜晚不睁眼，谁也不认识你。你的牌同样能让整轮献祭化为血泊。'}
+ greatblade:{n:'巨刃',camp:'r',mk:'†',d:'夜晚你与白蔷薇、司教、双刃一起睁眼相认，混在其中。只要有一张血刃牌落桌，当轮所有花苞都会被斩杀。'},
+ twinblade:{n:'双刃',camp:'r',mk:'‡',d:'夜晚你与白蔷薇、司教、巨刃一起睁眼相认。之后你用幽魂牌换来桌上的另一张双刃牌，手里有 2 张双刃、1 张信者。'},
+ darkblade:{n:'暗刃',camp:'r',mk:'☠',d:'你夜晚不睁眼，谁也不认识你，也没人认识你。你的牌同样能让整轮献祭化为血泊。'}
 };
 const CARDS={
  rose:{n:'白蔷薇',camp:'w',mk:'✿',cap:'花苞'},
@@ -254,14 +255,9 @@ const EFF={
  11:{n:'血刃狂宴',d:'本回合若出现血刃牌，斩杀的花苞额外 +1。',t:0},
  12:{n:'蔷薇预言',d:'白蔷薇私下得知 1 名随机血刃阵营玩家。',t:0}
 };
-const SETUP={
- 5:['rose','bishop','flower','greatblade','twinblade'],
- 6:['rose','bishop','flower','flower','greatblade','twinblade'],
- 7:['rose','bishop','flower','flower','greatblade','twinblade','darkblade'],
- 8:['rose','bishop','flower','flower','flower','greatblade','twinblade','darkblade'],
- 9:['rose','bishop','flower','flower','flower','flower','greatblade','twinblade','darkblade'],
- 10:['rose','bishop','flower','flower','flower','flower','greatblade','twinblade','darkblade','darkblade']
-};
+// 角色卡配置（照实体说明书）：[白蔷薇, 司教, 信者, 巨刃, 双刃, 暗刃]
+const SETUP_N={5:[1,1,1,0,1,1],6:[1,1,2,0,1,1],7:[1,1,2,1,1,1],8:[1,1,3,1,1,1],9:[1,1,3,2,1,1],10:[1,1,4,2,1,1]};
+const SETUP=Object.fromEntries(Object.entries(SETUP_N).map(([n,c])=>[n,['rose','bishop','flower','greatblade','twinblade','darkblade'].flatMap((r,i)=>Array(c[i]).fill(r))]));
 // 5 人局取自实体图板（献祭 ×3 / 斩杀 ×4）；其他人数为推算值，房主可在大厅调整
 const defTargets=n=>({sac:Math.max(2,n-2),kill:Math.max(3,n-1)});
 const tgtFor=(st,n)=>(st.tgt&&st.tgt.n===n)?{sac:st.tgt.sac,kill:st.tgt.kill}:defTargets(n);
@@ -513,10 +509,10 @@ function vNight(st){
   const cnt=Object.keys(st.ready||{}).length;
   const offUnready=st.players.filter(p=>!st.ready[p.id]&&isOff(p.id));
   return `${head(st)}<h1 class="title">入 夜</h1>${hostBanner(st)}
-  <div class="sub">四个人在黑暗里睁开了眼——两朵蔷薇，两把刀。</div>
+  <div class="sub">黑夜降临，白蔷薇、司教、双刃、巨刃睁开了眼。</div>
   ${idCard(S.sec.role)}
   ${S.sec.night?`<div class="note"><b>相认名单</b><br>${S.sec.night.map(esc).join('、')}<br>
-    <span style="color:var(--ash)">这四人中两人属白、两人属红，包括你在内。谁是谁，得靠今晚剩下的时间去猜。</span></div>`
+    <span style="color:var(--ash)">这 ${S.sec.night.length} 人（包括你）就是白蔷薇、司教、双刃和巨刃，但你不知道谁是谁。</span></div>`
    :`<div class="note">你没有睁眼。除了自己的手牌，你一无所知。</div>`}
   <div class="panel"><div class="eyebrow">你的白水晶</div>
     <div class="muted">编号 <b style="color:var(--sanct);font-size:18px">${S.sec.crystal}</b> — <b>${EFF[S.sec.crystal].n}</b><br>${EFF[S.sec.crystal].d}</div>
@@ -661,8 +657,12 @@ function vSheet(){
   <h3>阵营与胜利</h3>
   <p><b>白蔷薇阵营</b>（白蔷薇 / 司教 / 信者）：在有限的回合内，让白蔷薇的身份牌<b>安全献祭</b>不被斩杀，并把足够数量的花苞送上祭坛（图板左侧）。</p>
   <p><b>血刃阵营</b>（巨刃 / 双刃 / 暗刃）：白蔷薇牌与血刃牌同时落桌即立刻获胜；或斩杀足够数量的花苞（图板右侧）；或撑到所有白水晶用完，白方仍未达标。</p>
+  <h3>角色配置</h3>
+  <table class="setup"><tr><th>人数</th><th>白蔷薇</th><th>司教</th><th>信者</th><th>巨刃</th><th>双刃</th><th>暗刃</th></tr>
+  ${Object.entries(SETUP_N).map(([n,c])=>`<tr><td>${n}</td>${c.map(x=>`<td>${x}</td>`).join('')}</tr>`).join('')}</table>
   <h3>夜晚</h3>
-  <p>白蔷薇、司教、巨刃、双刃互相确认——四个人彼此看见，但不知道谁是谁。暗刃与信者不睁眼。</p>
+  <p>白蔷薇、司教、双刃、巨刃睁眼，互相看见彼此（但不知道谁是什么角色）。信者与暗刃不睁眼。</p>
+  <p>接着双刃把手里的幽魂牌换成桌上的另一张双刃牌，手牌变成 2 张双刃、1 张信者。</p>
   <h3>每一回合</h3>
   <ul><li>奉献硬币的持有者，指定一名尚未用过水晶的玩家。</li>
   <li>那枚白水晶公开翻开（图板上方的回合格），强制发动对应编号的魔法，不能放弃。</li>
@@ -670,13 +670,9 @@ function vSheet(){
   <li>所有打出的牌混洗后一起翻开。只要出现<b>任意一张血刃牌</b>，本轮所有花苞被斩杀（放到图板右侧）；一张血刃牌都没有，则全部献祭成功（放到图板左侧）。幽魂牌不产生任何效果，只是烟雾。</li>
   <li>硬币传给下一位还有水晶的玩家。所有水晶用完，仪式结束。</li></ul>
   <h3>手牌</h3>
-  <p>每人 3 张：你的<b>身份牌</b>、1 张<b>信者牌</b>、1 张<b>幽魂牌</b>。红方手里也有信者牌——打出去能博取信任，但真的会帮白方填满祭坛。</p>
+  <p>每人 3 张：你的<b>身份牌</b>、1 张<b>信者牌</b>、1 张<b>幽魂牌</b>（双刃例外：2 张双刃、1 张信者）。抽到白蔷薇、司教、信者的属白蔷薇阵营，抽到血刃（巨刃 / 双刃 / 暗刃）的属血刃阵营，整局不变。红方手里也有信者牌——打出去能博取信任，但真的会帮白方填满祭坛。</p>
   <h3>白水晶魔法书</h3>
   <p>${Object.keys(EFF).map(k=>`<b>${k} ${EFF[k].n}</b>　${EFF[k].d}`).join('<br>')}</p>
-  <h3>掉线与换手机</h3>
-  <p>刷新或重开页面会自动回到座位。换了手机就用<b>原来的名字</b>加入同一房间，旧设备离线 75 秒后座位会转到新手机。房主掉线时，其他玩家可以「接管房主」继续这局。</p>
-  <h3>与实体版的差异</h3>
-  <p>省略了双刃的换牌动作与骰子。5 人局的目标（献祭 ×3、斩杀 ×4）照实体图板；其他人数是推算值，房主可在大厅调整。</p>
   <button data-a="closesheet">关闭</button>
   </div></div>`;
 }
@@ -966,7 +962,7 @@ function deal(){
   st.hc={};
   st.players.forEach((p,i)=>{
     const r=roles[i];
-    H.sec[p.id]={role:r,hand:[r,'flower','ghost'],crystal:nums[i],notes:[],night:FOUR.includes(r)?fourNames:null};
+    H.sec[p.id]={role:r,hand:r==='twinblade'?['twinblade','twinblade','flower']:[r,'flower','ghost'],crystal:nums[i],notes:[],night:FOUR.includes(r)?fourNames:null};
     H.dirty.add(p.id);st.hc[p.id]=3;
   });
   st.cfg=tgtFor(st,n);st.maxRound=n;st.round=0;st.used=[];st.ready={};st.hist=[];st.cry=null;st.lastR=null;
