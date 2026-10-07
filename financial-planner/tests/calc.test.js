@@ -236,3 +236,40 @@ test('Event labels use "You retire" grammar', () => {
   const ev = calc.simulate(s).rows.flatMap((r) => r.events).map((e) => e.label);
   assert.ok(ev.includes('You retire'));
 });
+
+test('CPF LIFE deferred to 70 starts later and pays up to 7% more a year', () => {
+  const s = data.sample(); s.hasSpouse = false;
+  const at65 = calc.simulate(s);
+  s.cpf.client.payoutStart = 70;
+  const at70 = calc.simulate(s);
+  const pay = (sim, age) => sim.rows.find((r) => r.age === age).flows.cpfLife;
+  assert.equal(pay(at70, 67), 0);
+  close(pay(at70, 70) / pay(at65, 70), Math.pow(1.07, 5), 0.0001);
+  s.cpf.client.payoutStart = 75; // clamped to 70
+  assert.equal(calc.simulate(s).cpf.client.startAge, 70);
+});
+
+test('Surplus share saved and split into investments', () => {
+  const s = data.sample();
+  const all = calc.simulate(s).rows[0];
+  s.assumptions.surplusSaved = 0.6; s.assumptions.surplusInvest = 0.7;
+  const r = calc.simulate(s).rows[0];
+  const net = all.inflow - all.outflow;
+  close(r.flows.surplusSpent, net * 0.4, 1);
+  close(r.flows.surplusInvested, net * 0.6 * 0.7, 1);
+  assert.ok(r.cash < all.cash && r.investments > all.investments);
+});
+
+test('Ring-fenced emergency fund is never spent', () => {
+  const s = data.sample();
+  s.retirement.monthlySpending = 9000; // forces a drawdown
+  s.assumptions.ringFence = true; s.assumptions.emergencyReserve = 15000;
+  const sim = calc.simulate(s);
+  assert.equal(sim.reserve, 15000);
+  const first = sim.rows.find((r) => r.shortfall < 0);
+  assert.ok(first, 'plan runs short');
+  // Before the shortfall, cash never dips under the reserve.
+  sim.rows.filter((r) => r.age < first.age).forEach((r) => assert.ok(r.cash >= 15000 - 0.01));
+  const plain = calc.simulate({ ...s, assumptions: { ...s.assumptions, ringFence: false } });
+  assert.ok(sim.shortfallAge <= plain.shortfallAge);
+});

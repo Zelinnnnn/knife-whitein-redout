@@ -71,6 +71,10 @@
       // CareShield Life severe-disability payout for claims made in 2026,
       // rising 4% a year to 2030 for later claims.
       careShieldPayout: 689,
+      // Deferring CPF LIFE past 65 (up to 70) raises payouts by up to 7% for
+      // each year deferred.
+      latestPayoutAge: 70,
+      deferralRate: 0.07,
 
       // MediShield Life annual premiums by age (from the Excel template's
       // CPF Estimator sheet). Paid from MediSave.
@@ -156,6 +160,9 @@
       preRetReturn: 0.06,
       postRetReturn: 0.05,
       retirementGrowth: 0.025, // custom spending growth after retirement
+      surplusSaved: 1,     // share of each year's surplus kept (the rest is spent)
+      surplusInvest: 0,    // share of the kept surplus that goes to investments
+      ringFence: false,    // keep the emergency fund out of the projection
       emergencyMonths: 6,
       deathMultiple: 10,
       ciMultiple: 5,

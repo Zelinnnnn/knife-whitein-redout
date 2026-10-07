@@ -37,7 +37,7 @@
       });
       return Object.assign({}, r, {
         cash: r.cash / f, investments: r.investments / f, cpf: r.cpf / f, total: r.total / f, net: r.net / f,
-        inflow: r.inflow / f, outflow: r.outflow / f, shortfall: r.shortfall / f, cpfBy: cpfBy,
+        inflow: r.inflow / f, outflow: r.outflow / f, shortfall: r.shortfall / f, reserve: (r.reserve || 0) / f, cpfBy: cpfBy,
         events: r.events.map(function (e) { return e.amount ? Object.assign({}, e, { amount: e.amount / f }) : e; }),
       });
     });
@@ -82,7 +82,8 @@
         ${TIMELINE_SERIES.map(function (s) {
           return html`<div class="tt-row"><i class=${'key ' + s.key2} /><span>${s.label}</span><b>${money(s.value(r))}</b></div>`;
         })}
-        ${r.cash < 0 && html`<div class="tt-row"><i class="key short" /><span>Shortfall</span><b>${money(r.cash)}</b></div>`}
+        ${r.shortfall < 0 && html`<div class="tt-row"><i class="key short" /><span>Shortfall</span><b>${money(r.shortfall)}</b></div>`}
+        ${r.reserve > 0 && html`<div class="tt-note">Includes ${money(r.reserve)} emergency fund kept aside</div>`}
         <div class="tt-sep" />
         <div class="tt-row"><i /><span>Total</span><b>${money(r.total)}</b></div>
         ${base && html`<div class="tt-row"><i class="key ink" /><span>Base plan</span><b>${money(base.total)}</b></div>`}
@@ -104,7 +105,7 @@
     return html`<${charts.StackedColumns}
       label=${'Projected cash, investments and CPF by age for ' + names(model)}
       rows=${rows} series=${TIMELINE_SERIES} height=${props.height || 340}
-      negative=${function (r) { return r.cash; }}
+      negative=${function (r) { return r.shortfall; }}
       baseline=${baseRows ? function (r) { var b = baseRows.find(function (x) { return x.age === r.age; }); return b ? b.total : null; } : null}
       lines=${timelineLines(model, sim)} bands=${bandsFor(model)}
       pins=${function (r) { return r.events.some(function (e) { return e.kind === 'goal'; }); }}
@@ -349,7 +350,7 @@
     var peak = rows.reduce(function (best, r) { return r.total > best.total ? r : best; }, rows[0]);
     var end = rows[rows.length - 1];
     var baseEnd = baseRows[baseRows.length - 1];
-    var worst = Math.min.apply(null, rows.map(function (r) { return r.cash; }).concat([0]));
+    var worst = Math.min.apply(null, rows.map(function (r) { return r.shortfall; }).concat([0]));
     var events = [];
     rows.forEach(function (r) { r.events.forEach(function (e) { events.push({ age: r.age, row: r, e: e }); }); });
     var sc = active ? sim.scenario : null;
@@ -392,7 +393,7 @@
           <thead><tr><th class="n">Age</th>${m.people[1] && html`<th class="n">${m.people[1].name}</th>`}<th class="n">Cash</th><th class="n">Investments</th><th class="n">CPF</th><th class="n">Total</th><th class="n">Money in</th><th class="n">Money out</th><th>Events</th></tr></thead>
           <tbody>${rows.map(function (r) {
             return html`<tr><td class="n">${r.age}</td>${m.people[1] && html`<td class="n">${r.ages.spouse}</td>`}
-              <td class="n" style=${r.cash < 0 ? 'color:var(--critical-ink)' : ''}>${money(r.cash)}</td><td class="n">${money(r.investments)}</td><td class="n">${money(r.cpf)}</td>
+              <td class="n" style=${r.shortfall < 0 ? 'color:var(--critical-ink)' : ''}>${money(r.cash)}</td><td class="n">${money(r.investments)}</td><td class="n">${money(r.cpf)}</td>
               <td class="n"><b>${money(r.total)}</b></td><td class="n">${money(r.inflow)}</td><td class="n">${money(r.outflow)}</td>
               <td class="small">${r.events.map(function (e) { return e.label; }).join('; ')}</td></tr>`;
           })}</tbody>

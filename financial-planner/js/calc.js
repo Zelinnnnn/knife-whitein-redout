@@ -136,7 +136,7 @@
         lifeExpectancy: Math.max(age + 1, Math.round(num(p.lifeExpectancy, 85))),
         income: Object.assign({ salary: 0, bonus: 0, business: 0, dividends: 0, interest: 0, rental: 0, others: 0 }, (state.income || {})[key] || {}),
         invest: num((state.investing || {})[key]),
-        cpfIn: Object.assign({ oa: 0, sa: 0, ma: 0, ra: 0, retirementSum: 'FRS', careshieldSupplement: 0, lifeMonthly: 0, lifePlan: 'standard' }, (state.cpf || {})[key] || {}),
+        cpfIn: Object.assign({ oa: 0, sa: 0, ma: 0, ra: 0, retirementSum: 'FRS', careshieldSupplement: 0, lifeMonthly: 0, lifePlan: 'standard', payoutStart: 65 }, (state.cpf || {})[key] || {}),
         taxIn: Object.assign({ employmentExpenses: 0, donations: 0, ptr: 0, reliefs: {} }, (state.tax || {})[key] || {}),
       };
     });
@@ -253,9 +253,10 @@
       raFormed: false, annuitized: false, lifeMonthly: 0, raAt55: null, raAt65: null,
       sums: cohort(p.age), choice: CFG.cpf.retirementSums[i.retirementSum] ? i.retirementSum : 'FRS', closed: false,
       plan: lifePlan(i.lifePlan),
+      startAge: payoutStartAge(i),
     };
     if (p.age >= CFG.cpf.raAge) { s.raFormed = true; s.ra += s.sa; s.sa = 0; s.raAt55 = s.ra; }
-    if (p.age >= CFG.cpf.payoutAge) {
+    if (p.age >= s.startAge) {
       s.annuitized = true;
       // A payout the member already receives is entered as-is; store it as the Standard equivalent.
       s.lifeMonthly = num(i.lifeMonthly) ? num(i.lifeMonthly) / s.plan.factor : s.ra * CFG.cpf.lifePayoutFactor;
@@ -267,7 +268,10 @@
   function cpfTotal(s) { return s.oa + s.sa + s.ma + s.ra; }
   // Monthly CPF LIFE payout at a given age under the member's plan.
   function lifePayoutAt(s, age) {
-    return s.lifeMonthly * s.plan.factor * Math.pow(1 + s.plan.growth, Math.max(0, age - CFG.cpf.payoutAge));
+    return s.lifeMonthly * s.plan.factor * Math.pow(1 + s.plan.growth, Math.max(0, age - s.startAge));
+  }
+  function payoutStartAge(cpfIn) {
+    return clamp(Math.round(num(cpfIn.payoutStart, CFG.cpf.payoutAge)), CFG.cpf.payoutAge, CFG.cpf.latestPayoutAge);
   }
 
   /*
@@ -287,9 +291,11 @@
       s.raFormed = true; s.raAt55 = s.ra;
       out.events.push('ra');
     }
-    if (!s.annuitized && age >= c.payoutAge) {
-      s.lifeMonthly = s.ra * c.lifePayoutFactor;
-      s.raAt65 = s.ra; s.ra = 0; s.annuitized = true;
+    if (s.raAt65 === null && age >= c.payoutAge) s.raAt65 = s.ra;
+    if (!s.annuitized && age >= s.startAge) {
+      // Payout is set by the RA at 65, raised for each year of deferral.
+      s.lifeMonthly = s.raAt65 * c.lifePayoutFactor * Math.pow(1 + c.deferralRate, s.startAge - c.payoutAge);
+      s.ra = 0; s.annuitized = true;
       out.events.push('life');
     }
 
@@ -388,6 +394,13 @@
     var share = 1;
     (steps || []).forEach(function (x) { if (age >= x.age) share = x.share; });
     return share;
+  }
+
+  // Emergency fund to ring-fence: the amount entered, or months x essential spending.
+  function emergencyReserve(state) {
+    var a = assumptions(state);
+    if (!blank(a.emergencyReserve)) return Math.max(0, num(a.emergencyReserve));
+    return cashflowAnalysis(state).essentialMonthly * a.emergencyMonths;
   }
 
   function cashflowAnalysis(state) {
@@ -685,6 +698,10 @@
     var liabs = state.liabilities || [];
     var expenses = state.expenses || [];
     var pattern = spendingPattern(state);
+    var saveShare = clamp(num(a.surplusSaved, 1), 0, 1), investShare = clamp(num(a.surplusInvest, 0), 0, 1);
+    // Ring-fenced emergency fund: never spent, so the plan treats dipping
+    // into it as a shortfall. Capped at the cash held today.
+    var reserve = a.ringFence ? Math.min(cash, emergencyReserve(state)) : 0;
 
     for (var t = 0; t < horizon; t++) {
       var year = CFG.baseYear + t, clientAge = client.age + t;
@@ -794,23 +811,31 @@
       var outflow = f.tax + f.living + f.loans + f.premiums + f.goals + f.invest + f.extra + f.cpfShortfall;
       if (cash > 0) cash *= 1 + a.cashRate;
       inv *= 1 + (retiredPhase ? a.postRetReturn : a.preRetReturn);
-      cash += inflow - outflow;
+      var net = inflow - outflow;
+      f.surplusSpent = 0; f.surplusInvested = 0;
+      if (net > 0) {
+        var kept = net * saveShare;
+        f.surplusSpent = net - kept;
+        f.surplusInvested = kept * investShare;
+        cash += kept - f.surplusInvested;
+        inv += f.surplusInvested;
+      } else cash += net;
       inv += f.invest;
-      if (cash < 0 && inv > 0) {
-        var draw = Math.min(-cash, inv);
+      if (cash < reserve && inv > 0) {
+        var draw = Math.min(reserve - cash, inv);
         inv -= draw; cash += draw; f.drawdown = draw;
       }
       // OA savings can be withdrawn from 55 once the Retirement Account is set aside.
       f.cpfDraw = 0;
       ps.forEach(function (p) {
         var s = cpf[p.key];
-        if (cash < 0 && aliveLast[p.key] && perAge[p.key] >= CFG.cpf.raAge && s.oa > 0) {
-          var d = Math.min(-cash, s.oa);
+        if (cash < reserve && aliveLast[p.key] && perAge[p.key] >= CFG.cpf.raAge && s.oa > 0) {
+          var d = Math.min(reserve - cash, s.oa);
           s.oa -= d; cash += d; f.cpfDraw += d;
         }
       });
       events.forEach(function (e) {
-        if (e.kind === 'goal' && !goalStatus[e.id]) goalStatus[e.id] = { age: clientAge, funded: cash >= 0, from: f.cpfDraw > 0 ? 'CPF' : f.drawdown > 0 ? 'investments' : 'cash' };
+        if (e.kind === 'goal' && !goalStatus[e.id]) goalStatus[e.id] = { age: clientAge, funded: cash >= reserve, from: f.cpfDraw > 0 ? 'CPF' : f.drawdown > 0 ? 'investments' : 'cash' };
       });
 
       var cpfRow = {}, cpfSum = 0;
@@ -818,7 +843,7 @@
       rows.push({
         t: t, year: year, age: clientAge, ages: perAge,
         cash: cash, investments: inv, cpf: cpfSum, cpfBy: cpfRow,
-        shortfall: cash < 0 ? cash : 0,
+        shortfall: Math.min(0, cash - reserve), reserve: reserve,
         total: Math.max(0, cash) + inv + cpfSum,
         net: cash + inv + cpfSum,
         inflow: inflow, outflow: outflow, flows: f, events: events,
@@ -826,17 +851,17 @@
       if (!anyAlive) break; // single-person household after a death scenario
     }
 
-    var firstShort = rows.find(function (r) { return r.cash < 0; });
+    var firstShort = rows.find(function (r) { return r.shortfall < 0; });
     var retireRow = rows.find(function (r) { return r.age === client.retireAge; }) || rows[rows.length - 1];
     var cpfSummary = {};
     ps.forEach(function (p) {
       var s = cpf[p.key];
-      cpfSummary[p.key] = { lifeMonthly: s.lifeMonthly, raAt55: s.raAt55, raAt65: s.raAt65, sums: s.sums, choice: s.choice };
+      cpfSummary[p.key] = { lifeMonthly: s.lifeMonthly, raAt55: s.raAt55, raAt65: s.raAt65, sums: s.sums, choice: s.choice, startAge: s.startAge };
     });
     return {
       scenario: sc, rows: rows, goalStatus: goalStatus, cpf: cpfSummary,
       shortfallAge: firstShort ? firstShort.age : null,
-      worstShortfall: Math.min.apply(null, rows.map(function (r) { return r.cash; }).concat([0])),
+      worstShortfall: Math.min.apply(null, rows.map(function (r) { return r.shortfall; }).concat([0])), reserve: reserve,
       atRetirement: retireRow, end: rows[rows.length - 1],
     };
   }
@@ -873,7 +898,7 @@
     if (!row) return opening;
     var oa = 0;
     Object.keys(row.cpfBy).forEach(function (k) { oa += row.cpfBy[k].oa; });
-    var cash = Math.max(0, row.cash);
+    var cash = Math.max(0, row.cash - (row.reserve || 0));
     return { cash: cash, investments: row.investments, cpfOa: oa, total: cash + row.investments + oa };
   }
 
@@ -897,8 +922,8 @@
       return ps.map(function (p) {
         var off = client.age - p.age;
         var c = s.cpf[p.key], plan = lifePlan(p.cpfIn.lifePlan);
-        var from = Math.max(CFG.cpf.payoutAge, p.age);
-        var startMonthly = c.lifeMonthly * plan.factor * Math.pow(1 + plan.growth, from - CFG.cpf.payoutAge);
+        var from = Math.max(c.startAge, p.age);
+        var startMonthly = c.lifeMonthly * plan.factor * Math.pow(1 + plan.growth, from - c.startAge);
         return { key: p.key, name: p.name, from: from + off, to: p.lifeExpectancy + off, monthly: startMonthly, growth: plan.growth, plan: plan.label };
       });
     }
@@ -1130,6 +1155,6 @@
     goalSchedule: goalSchedule, goalSetAside: goalSetAside, retirementSpending: retirementSpending, scenarioDefaults: scenarioDefaults, normalizeScenario: normalizeScenario,
     simulate: simulate, nestEggTarget: nestEggTarget, retirementAnalysis: retirementAnalysis, resourcesAt: resourcesAt,
     goalsAnalysis: goalsAnalysis, healthCheck: healthCheck, healthScore: healthScore, computeAll: computeAll,
-    NEED_ITEMS: NEED_ITEMS, NEED_RISKS: NEED_RISKS, coverNeeds: coverNeeds, spendingPattern: spendingPattern, lifePlan: lifePlan, says: says,
+    NEED_ITEMS: NEED_ITEMS, NEED_RISKS: NEED_RISKS, coverNeeds: coverNeeds, spendingPattern: spendingPattern, lifePlan: lifePlan, emergencyReserve: emergencyReserve, payoutStartAge: payoutStartAge, says: says,
   };
 });

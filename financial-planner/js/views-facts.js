@@ -82,6 +82,30 @@
     </div>`;
   };
 
+  // How the yearly surplus and the emergency fund are treated on the timeline.
+  function SavingsRules(props) {
+    var s = props.state, api = props.api, m = props.model, a = m.assumptions, cf = m.cashflow;
+    var surplus = Math.max(0, cf.surplus);
+    var kept = surplus * a.surplusSaved, toInv = kept * a.surplusInvest;
+    var reserve = calc.emergencyReserve(s);
+    return html`<${ui.Card} title="What happens to the surplus" sub="Applied to every year of the timeline.">
+      <div class="fields tight">
+        <${NF} label="Share of surplus saved" path="assumptions.surplusSaved" percent value=${a.surplusSaved} hint="The rest is spent" onChange=${function (v) { api.set('assumptions.surplusSaved', v); }} />
+        <${NF} label="Of savings, invested" path="assumptions.surplusInvest" percent value=${a.surplusInvest} hint="The rest stays in cash" onChange=${function (v) { api.set('assumptions.surplusInvest', v); }} />
+      </div>
+      <dl class="kv">
+        <dt>Into cash this month</dt><dd>${money(kept - toInv)}</dd>
+        <dt>Into investments (${pct(a.preRetReturn)} return)</dt><dd>${money(toInv)}</dd>
+        <dt>Spent</dt><dd>${money(surplus - kept)}</dd>
+      </dl>
+      <div class="divider" />
+      <${ui.Check} label="Keep the emergency fund untouched" path="assumptions.ringFence" checked=${!!a.ringFence} onChange=${function (v) { api.set('assumptions.ringFence', v); }} />
+      ${a.ringFence && html`<div class="fields tight"><${NF} label="Emergency fund" path="assumptions.emergencyReserve" allowBlank placeholder=${String(Math.round(cf.essentialMonthly * a.emergencyMonths))}
+        value=${a.emergencyReserve} hint=${'Blank uses ' + a.emergencyMonths + ' months of expenses. Never spent on the timeline.'} onChange=${function (v) { api.set('assumptions.emergencyReserve', v); }} /></div>`}
+      ${a.ringFence && reserve > m.netWorth.liquid && html`<p class="small muted">Only ${money(m.netWorth.liquid)} is in cash today, so that is what gets kept aside.</p>`}
+    </${ui.Card}>`;
+  }
+
   // Spending slices in a fixed order so colours follow the category.
   function spendItems(cf) {
     var cat = function (c) { var x = cf.byCategory.find(function (y) { return y.category === c; }); return x ? x.amount : 0; };
@@ -183,6 +207,7 @@
               <${ui.Pill} status=${cf.surplus >= 0 ? 'good' : 'critical'}>${cf.surplus >= 0 ? 'Cashflow positive' : 'Spending more than you earn'}</${ui.Pill}>
             </div>
           </${ui.Card}>
+          <${SavingsRules} state=${s} model=${m} api=${api} />
           <${ui.Card} title="Allocation vs recommended" sub="Tick marks the recommended share of take-home pay.">
             <div class="bullets">${cf.buckets.map(function (b) {
               return html`<${charts.Bullet} label=${b.label} value=${b.amount} target=${b.recommended} valueText=${money(b.amount) + ' · ' + pct(b.share)} targetText=${'rec. ' + pct(b.target)} />`;
@@ -485,6 +510,10 @@
             onChange=${function (v) { api.set(base + 'lifePlan', v); }} />
           <span class="hint">${calc.lifePlan(c.lifePlan).note}</span>
         </div>
+        <div class="fields tight">
+          <${NF} label="CPF LIFE payouts start at" path=${base + 'payoutStart'} prefix="" suffix="years" value=${c.payoutStart === undefined ? 65 : c.payoutStart}
+            hint="65 to 70. Each year deferred raises payouts by up to 7%." onChange=${function (v) { api.set(base + 'payoutStart', v); }} />
+        </div>
         <div class="table-wrap"><table class="data compact">
           <thead><tr><th>Average month</th><th class="n">Employee</th><th class="n">Employer</th><th class="n">OA</th><th class="n">SA / RA</th><th class="n">MA</th></tr></thead>
           <tbody><tr><td>Contribution</td><td class="n">${money(con.employee / 12)}</td><td class="n">${money(con.employer / 12)}</td><td class="n">${money(con.oa / 12)}</td><td class="n">${money(con.sa / 12)}</td><td class="n">${money(con.ma / 12)}</td></tr></tbody>
@@ -492,8 +521,8 @@
         <dl class="kv">
           <dt>Turns 55 in ${sum.sums.year55}: projected BRS / FRS / ERS</dt><dd>${compact(sum.sums.BRS)} / ${compact(sum.sums.FRS)} / ${compact(sum.sums.ERS)}</dd>
           <dt>Retirement Account at 55</dt><dd>${sum.raAt55 === null ? '–' : money(sum.raAt55)}</dd>
-          <dt>Estimated CPF LIFE payout from 65 (${calc.lifePlan(c.lifePlan).label})</dt><dd>${sum.lifeMonthly ? money(sum.lifeMonthly * calc.lifePlan(c.lifePlan).factor) + '/mth' : '–'}</dd>
-          ${sum.lifeMonthly > 0 && html`<dt>Same payout in today's dollars</dt><dd>${money(sum.lifeMonthly * calc.lifePlan(c.lifePlan).factor / Math.pow(1 + m.assumptions.inflation, Math.max(0, 65 - p.age)))}/mth</dd>`}
+          <dt>Estimated CPF LIFE payout from ${sum.startAge} (${calc.lifePlan(c.lifePlan).label})</dt><dd>${sum.lifeMonthly ? money(sum.lifeMonthly * calc.lifePlan(c.lifePlan).factor) + '/mth' : '–'}</dd>
+          ${sum.lifeMonthly > 0 && html`<dt>Same payout in today's dollars</dt><dd>${money(sum.lifeMonthly * calc.lifePlan(c.lifePlan).factor / Math.pow(1 + m.assumptions.inflation, Math.max(0, sum.startAge - p.age)))}/mth</dd>`}
         </dl>
       </${ui.Card}>`;
     }
@@ -502,12 +531,12 @@
       <${ui.PageHead} eyebrow="Step 5 of 8" title="CPF" lede="Balances projected year by year with 2026 contribution rates and ceilings, 2.5% OA and 4% SA, MA and RA interest plus extra interest, MediShield Life and CareShield Life premiums from MediSave, and the Retirement Account formed at 55." />
       <div class=${'grid ' + (m.people.length > 1 ? 'cols-2' : '')}>${m.people.map(personCard)}</div>
       <${ui.Card} title=${'Projected CPF balances: ' + person.name}
-        sub=${(today ? 'In today\u2019s dollars. ' : 'In future dollars. ') + 'RA goes into CPF LIFE at 65, so it leaves the balance and returns as monthly payouts.'}
+        sub=${(today ? 'In today\u2019s dollars. ' : 'In future dollars. ') + 'RA goes into CPF LIFE when payouts start (' + m.sim.cpf[who].startAge + '), so it leaves the balance and returns as monthly payouts.'}
         tools=${html`<${V.DollarToggle} state=${s} api=${api} />${m.people.length > 1 && html`<${ui.Seg} label="Person" value=${who} options=${m.people.map(function (p) { return { value: p.key, label: p.name }; })} onChange=${setWho} />`}
           <button class="btn sm" onClick=${function () { setShowTable(!showTable); }}><${ui.Icon} name="table" />${showTable ? 'Hide table' : 'Show table'}</button>`}>
         <div class="legend">${CPF_SERIES.map(function (x) { return html`<span><i class=${x.k2} />${x.label}</span>`; })}</div>
         <${charts.StackedColumns} label=${'Projected CPF balances by age for ' + person.name} rows=${rows} series=${series} height=${320}
-          lines=${[{ x: 55, label: 'RA formed' }, { x: 65, label: 'CPF LIFE starts' }].filter(function (l) { return l.x > person.age; })}
+          lines=${[{ x: 55, label: 'RA formed' }, { x: m.sim.cpf[who].startAge, label: 'CPF LIFE starts' }].filter(function (l) { return l.x > person.age; })}
           tooltip=${function (r) {
             var tot = r.oa + r.sa + r.ma + r.ra;
             return html`<div><div class="tt-head">${person.name}, age ${r.age} · ${r.year}</div>
@@ -652,6 +681,8 @@
                   options=${Object.keys(CFG.cpf.lifePlans).map(function (k) { var lp = CFG.cpf.lifePlans[k]; return { value: k, label: lp.label, title: lp.note }; })}
                   onChange=${function (v) { api.set('cpf.' + p.key + '.lifePlan', v); }} />
                 <span class="hint">${calc.lifePlan(c.lifePlan).note}</span>
+                <div class="fields tight" style="margin-top:6px"><${NF} label="Payouts start at" id=${'ret-start-' + p.key} prefix="" suffix="years" value=${c.payoutStart === undefined ? 65 : c.payoutStart}
+                  hint="65 to 70; up to 7% more a year deferred" onChange=${function (v) { api.set('cpf.' + p.key + '.payoutStart', v); }} /></div>
               </div>`;
             })}
           </${ui.Card}>

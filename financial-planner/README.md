@@ -81,6 +81,19 @@ financial-planner/
 
 To update rates when CPF or IRAS publish new figures, edit `js/config.js` only.
 
+## Savings rules and CPF LIFE start age
+
+- **What happens to the surplus** (Cashflow page): the share of each year's
+  surplus that is saved (the rest is treated as spent), and how much of the
+  saved amount goes into investments instead of cash. Defaults are 100% saved
+  and 0% invested, the original behaviour.
+- **Keep the emergency fund untouched**: the timeline never spends it. Dipping
+  into it counts as a shortfall. Leave the amount blank to use the emergency
+  months × essential spending, capped at the cash held today.
+- **CPF LIFE payouts start at** 65 to 70 per person (CPF and Retirement
+  pages). The payout is set by the RA at 65 and raised 7% for each year of
+  deferral.
+
 ## Today's dollars
 
 Charts and headline figures default to today's dollars: future amounts are
