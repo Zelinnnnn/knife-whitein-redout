@@ -7,6 +7,7 @@
   var V = FP.views = FP.views || {};
   var NF = ui.NumberField, TF = ui.TextField, SF = ui.SelectField;
 
+  function blank(x) { return x === '' || x === null || x === undefined; }
   function personKeys(state) { return state.hasSpouse ? ['client', 'spouse'] : ['client']; }
   function personName(state, key) {
     var p = (state.people || {})[key] || {};
@@ -575,6 +576,75 @@
   };
 
   // ------------------------------------------------------------------ goals
+  // Home purchase: scheme, price, timing, fees and loan, with the full
+  // payment schedule and affordability checks.
+  function HomeGoal(props) {
+    var g = props.goal, r = props.r, s = props.state, api = props.api, m = props.model;
+    var P = g.property || {}, plan = r.home;
+    if (!plan) return null;
+    var sc = plan.scheme, L = plan.loan;
+    var aff = calc.propertyAffordability(plan, m.cashflow);
+    var set = function (k) { return function (v) { api.setItem('goals', g.id, k, v); }; };
+    var setP = function (k) { return function (v) { api.setItem('goals', g.id, 'property', Object.assign({}, P, (function () { var o = {}; o[k] = v; return o; })())); }; };
+    var id = function (k) { return 'home-' + k + '-' + g.id; };
+    var client = m.people[0];
+    var st = r.status;
+    var hasKey = sc.keyYears > 0;
+    return html`<div class="item" key=${g.id}>
+      <div class="item-head">
+        <span class="title">${g.name || 'Home'}</span>
+        ${st ? html`<${ui.Pill} status=${st.funded ? (st.from === 'cash' ? 'good' : 'warning') : 'critical'}>${st.funded ? 'Affordable on the timeline' : 'Cash runs short'}</${ui.Pill}>` : ''}
+        <${Remove} label=${g.name} onClick=${function () { api.removeItem('goals', g.id); }} />
+      </div>
+      <div class="fields">
+        <${TF} label="Goal" id=${id('name')} value=${g.name} onChange=${set('name')} />
+        <${SF} label="Property and payment scheme" id=${id('scheme')} value=${sc.id} options=${calc.CFG_SCHEMES.map(function (x) { return { value: x.id, label: x.label }; })} onChange=${setP('scheme')} />
+        <${NF} label="Purchase price" id=${id('price')} value=${g.amount} hint="Price at purchase" onChange=${set('amount')} />
+        <${NF} label="Buy in" id=${id('years')} prefix="" suffix="years" value=${g.inYears} hint=${'At ' + client.name + '’s age ' + (client.age + plan.stages[0].t)} onChange=${set('inYears')} />
+        ${hasKey && html`<${NF} label="Keys / TOP after" id=${id('key')} prefix="" suffix="years" value=${plan.keyYears} hint="BTO waits are often 3 to 5 years" onChange=${setP('keyYears')} />`}
+        ${s.hasSpouse && html`<${SF} label="Bought by" id=${id('owner')} value=${plan.owner} options=${ownerOptions(s, true)} onChange=${setP('owner')} />`}
+        <${SF} label="Stamp duty profile" id=${id('absd')} value=${P.absd || 'sc1'} options=${CFG.property.absd.map(function (x) { return { value: x.id, label: x.label + (x.rate ? ' (' + pct(x.rate) + ' ABSD)' : '') }; })} onChange=${setP('absd')} />
+        <${NF} label="Housing grants" id=${id('grants')} value=${P.grants} hint="e.g. Enhanced CPF Housing Grant" onChange=${setP('grants')} />
+        <${NF} label="Renovation at keys" id=${id('reno')} value=${P.renovation} onChange=${setP('renovation')} />
+      </div>
+      <details>
+        <summary class="btn ghost sm" style="display:inline-flex">Loan and fees: ${L.label}, ${pct(L.rate, 2)}, ${L.years} years</summary>
+        <div class="fields tight" style="margin-top:10px">
+          <${NF} label="Loan-to-value" id=${id('ltv')} percent value=${blank(P.loanPct) ? 0.75 : P.loanPct} hint="75% is the maximum" onChange=${setP('loanPct')} />
+          <${NF} label="Interest rate" id=${id('rate')} percent value=${L.rate} onChange=${setP('rate')} />
+          <${NF} label="Loan tenure" id=${id('tenure')} prefix="" suffix="years" value=${L.years} onChange=${setP('tenure')} />
+          <${NF} label="Instalment paid from CPF OA" id=${id('cpfShare')} percent value=${blank(P.cpfShare) ? 1 : P.cpfShare} hint="Any OA shortfall is paid in cash" onChange=${setP('cpfShare')} />
+          <${NF} label="Legal fees" id=${id('legal')} value=${blank(P.legal) ? CFG.property.fees[sc.kind].legal : P.legal} onChange=${setP('legal')} />
+          <${NF} label="Other fees" id=${id('other')} value=${blank(P.otherFees) ? CFG.property.fees[sc.kind].other : P.otherFees} hint="Valuation, option, admin" onChange=${setP('otherFees')} />
+        </div>
+      </details>
+      <p class="small muted">${sc.note}</p>
+      <div class="table-wrap"><table class="data compact">
+        <thead><tr><th>When</th><th>What</th><th class="n">Amount</th><th class="n">Cash</th><th class="n">CPF OA</th></tr></thead>
+        <tbody>
+          ${plan.stages.map(function (stg) {
+            return [
+              html`<tr class="group"><td colspan="5">${stg.label} · ${client.name} ${client.age + stg.t} (${CFG.baseYear + stg.t})</td></tr>`,
+              stg.lines.map(function (l) { return html`<tr><td /><td>${l.label}</td><td class="n">${money(l.amount)}</td><td class="n">${l.cash ? money(l.cash) : '–'}</td><td class="n">${l.cpf ? money(l.cpf) : '–'}</td></tr>`; }),
+              html`<tr class="total"><td /><td>Due at this stage</td><td class="n">${money(stg.total)}</td><td class="n">${money(stg.cash)}</td><td class="n">${money(stg.cpf)}</td></tr>`,
+            ];
+          })}
+          <tr class="group"><td colspan="5">${hasKey ? 'From key collection' : 'From completion'} · ${client.name} ${client.age + L.startT} (${CFG.baseYear + L.startT})</td></tr>
+          <tr><td /><td>${L.label} of ${money(L.principal)} over ${L.years} years at ${pct(L.rate, 2)}</td><td class="n">${money(L.monthly)}/mth</td><td class="n">${money(L.monthly - L.cpfMonthly)}</td><td class="n">${money(L.cpfMonthly)}</td></tr>
+          <tr><td /><td class="small muted">Total interest over the loan</td><td class="n small">${money(L.totalInterest)}</td><td /><td /></tr>
+        </tbody>
+      </table></div>
+      <p class="small muted">CPF OA columns show what OA may pay. On the timeline OA pays what it holds at the time and any shortfall comes out of cash.</p>
+      <div class="checks">
+        ${aff.msrApplies && html`<div class="check-row"><span class="t">Mortgage servicing ratio</span><span class="v"><span class="small num">${aff.msr === null ? '–' : pct(aff.msr)} of gross income</span><${ui.Pill} status=${aff.msrOk === null ? 'neutral' : aff.msrOk ? 'good' : 'critical'}>${aff.msrOk ? 'Within 30%' : 'Above 30%'}</${ui.Pill}></span>
+          <span class="d">Instalment at the ${pct(L.stressRate)} stress rate. HDB flats and ECs are capped at 30%, which allows a loan of about ${money(aff.maxLoanMsr)} on today's income.</span></div>`}
+        <div class="check-row"><span class="t">Total debt servicing ratio</span><span class="v"><span class="small num">${aff.tdsr === null ? '–' : pct(aff.tdsr)} of gross income</span><${ui.Pill} status=${aff.tdsrOk === null ? 'neutral' : aff.tdsrOk ? 'good' : 'critical'}>${aff.tdsrOk ? 'Within 55%' : 'Above 55%'}</${ui.Pill}></span>
+          <span class="d">All loan repayments at the stress rate, against the 55% cap.</span></div>
+      </div>
+      <span class="small num">Upfront: <b>${money(plan.upfrontCash)}</b> cash and <b>${money(plan.upfrontCpf)}</b> CPF OA · cash set-aside <b>${money(r.setAside)}</b>/mth</span>
+    </div>`;
+  }
+
   V.goals = function (props) {
     var s = props.state, api = props.api, m = props.model;
     var total = m.goals.reduce(function (t, g) { return t + g.setAside; }, 0);
@@ -584,7 +654,11 @@
         <div class="stack">
           <${ui.Card} title="Add a goal">
             <div class="chips">${calc.GOAL_TYPES.map(function (t) {
-              return html`<button type="button" class="chip" onClick=${function () { api.addItem('goals', { id: data.id('goal'), type: t.id, name: t.label, amount: t.amount, inYears: t.inYears, repeat: t.repeat, inflate: true }); }}>+ ${t.label}</button>`;
+              return html`<button type="button" class="chip" onClick=${function () {
+                var g = { id: data.id('goal'), type: t.id, name: t.label, amount: t.amount, inYears: t.inYears, repeat: t.repeat, inflate: true };
+                if (t.id === 'property') { g.name = 'Our first home'; g.inflate = false; g.property = { scheme: 'bto_sds', owner: s.hasSpouse ? 'joint' : 'client', absd: 'sc1', renovation: 40000 }; }
+                api.addItem('goals', g);
+              }}>+ ${t.label}</button>`;
             })}</div>
           </${ui.Card}>
           ${(s.goals || []).length === 0 && html`<${ui.Card}><p class="muted">No goals yet. Pick one above to start.</p></${ui.Card}>`}
@@ -593,6 +667,7 @@
             var set = function (k) { return function (v) { api.setItem('goals', g.id, k, v); }; };
             var id = function (k) { return 'goal-' + k + '-' + g.id; };
             var st = r.status;
+            if (g.type === 'property') return html`<${HomeGoal} key=${g.id} goal=${g} r=${r} state=${s} model=${m} api=${api} />`;
             return html`<div class="item" key=${g.id}>
               <div class="item-head">
                 <span class="title">${g.name || 'Goal'}</span>

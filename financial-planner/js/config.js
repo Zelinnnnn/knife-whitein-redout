@@ -206,6 +206,57 @@
       taxRebate: { rate: 0.5, cap: 200 },
     },
 
+    // Home purchase. Rates from IRAS (BSD tiers, ABSD from 27 Apr 2023) and
+    // HDB/MAS loan rules (75% loan-to-value since Aug 2024). Each scheme lists
+    // the share of the price paid at each stage and the minimum in cash.
+    property: {
+      bsd: [
+        { upTo: 180000, rate: 0.01 }, { upTo: 360000, rate: 0.02 }, { upTo: 1000000, rate: 0.03 },
+        { upTo: 1500000, rate: 0.04 }, { upTo: 3000000, rate: 0.05 }, { upTo: Infinity, rate: 0.06 },
+      ],
+      absd: [
+        { id: 'sc1', label: 'Citizen, first home', rate: 0 },
+        { id: 'sc2', label: 'Citizen, second home', rate: 0.2 },
+        { id: 'sc3', label: 'Citizen, third or more', rate: 0.3 },
+        { id: 'pr1', label: 'PR, first home', rate: 0.05 },
+        { id: 'pr2', label: 'PR, second or more', rate: 0.3 },
+        { id: 'fr', label: 'Foreigner', rate: 0.6 },
+      ],
+      loans: {
+        hdb: { label: 'HDB loan', rate: 0.026, years: 25, stressRate: 0.03 },
+        bank: { label: 'Bank loan', rate: 0.03, years: 30, stressRate: 0.04 },
+      },
+      msr: 0.3,   // mortgage servicing ratio cap for HDB flats and ECs
+      tdsr: 0.55, // total debt servicing ratio cap
+      schemes: [
+        { id: 'bto_sds', label: 'HDB BTO: staggered downpayment, HDB loan', kind: 'hdb', loan: 'hdb', keyYears: 4,
+          stages: [{ at: 'buy', pct: 0.05, minCash: 0, label: 'Signing the Agreement for Lease' }, { at: 'key', pct: 0.20, minCash: 0, label: 'Key collection' }],
+          note: 'For first-timers who got their HFE letter by 30. 5% at signing, 20% at key collection.' },
+        { id: 'bto_hdb', label: 'HDB BTO: HDB loan', kind: 'hdb', loan: 'hdb', keyYears: 4,
+          stages: [{ at: 'buy', pct: 0.10, minCash: 0, label: 'Signing the Agreement for Lease' }, { at: 'key', pct: 0.15, minCash: 0, label: 'Key collection' }],
+          note: '10% at signing, 15% at key collection. CPF OA can pay the whole downpayment.' },
+        { id: 'bto_bank', label: 'HDB BTO: bank loan', kind: 'hdb', loan: 'bank', keyYears: 4,
+          stages: [{ at: 'buy', pct: 0.25, minCash: 0.05, label: 'Signing the Agreement for Lease' }],
+          note: 'Bank loans pay the full 25% at signing, at least 5% in cash.' },
+        { id: 'resale_hdb', label: 'HDB resale: HDB loan', kind: 'hdb', loan: 'hdb', keyYears: 0,
+          stages: [{ at: 'buy', pct: 0.25, minCash: 0, label: 'Option, exercise and completion' }],
+          note: 'Option and exercise fees (up to S$5,000) are part of the 25%. Completion takes about 8 to 10 weeks.' },
+        { id: 'resale_bank', label: 'HDB resale: bank loan', kind: 'hdb', loan: 'bank', keyYears: 0,
+          stages: [{ at: 'buy', pct: 0.25, minCash: 0.05, label: 'Option, exercise and completion' }],
+          note: '25% downpayment, at least 5% in cash.' },
+        { id: 'condo_dps', label: 'New launch condo: deferred payment', kind: 'private', loan: 'bank', keyYears: 4,
+          stages: [{ at: 'buy', pct: 0.20, minCash: 0.05, label: 'Booking fee and S&P (5% cash + 15%)' }, { at: 'key', pct: 0.05, minCash: 0, label: 'Second downpayment at TOP / key collection' }],
+          note: 'Only where the developer offers it: MAS has restricted deferred payment since 2007, and developers usually charge a few percent more for it. The loan starts at TOP.' },
+        { id: 'condo_resale', label: 'Resale condo', kind: 'private', loan: 'bank', keyYears: 0,
+          stages: [{ at: 'buy', pct: 0.25, minCash: 0.05, label: 'Option (1%), exercise (4%) and completion' }],
+          note: '5% in cash at option and exercise, the other 20% cash or CPF at completion.' },
+      ],
+      fees: {
+        hdb: { legal: 2500, other: 500 },
+        private: { legal: 4000, other: 800 },
+      },
+    },
+
     // Stress test shown beside every projection.
     stress: { returnShock: -0.02, inflationShock: 0.01 },
 

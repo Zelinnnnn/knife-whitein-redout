@@ -349,3 +349,57 @@ test('Dividend-only retirement keeps capital and lives on yield', () => {
   const worst = Math.max(...b.path.map((x) => Math.max(0, x.spending - x.payouts)));
   close(b.target, worst / 0.04, 1);
 });
+
+test('Buyer stamp duty tiers', () => {
+  assert.equal(calc.bsdFor(500000), 9600); // 1,800 + 3,600 + 4,200
+  assert.equal(calc.bsdFor(1500000), 44600);
+  assert.equal(calc.bsdFor(4000000), 179600); // 1,800 + 3,600 + 19,200 + 20,000 + 75,000 + 60,000
+});
+
+test('BTO staggered downpayment: 5% at signing, 20% and loan at keys', () => {
+  const s = data.sample();
+  const g = { id: 'home', type: 'property', name: 'BTO', amount: 500000, inYears: 1,
+    property: { scheme: 'bto_sds', keyYears: 4, grants: 30000, renovation: 40000, owner: 'joint' } };
+  const plan = calc.propertyPlan(g, s);
+  const [sign, keys] = plan.stages;
+  assert.equal(sign.t, 1); assert.equal(keys.t, 5);
+  // 5% of 500k = 25k, less 30k grants -> 0; balance of grants goes to key stage
+  close(sign.lines[0].amount, 25000);
+  close(sign.cpf, 0 + 9600); // BSD from CPF
+  close(sign.cash, 2500 + 500); // legal + other fees in cash
+  close(keys.cpf, 100000 - 5000); // 20% less leftover grants
+  close(keys.cash, 40000); // renovation
+  assert.equal(plan.loan.startT, 5);
+  close(plan.loan.principal, 375000);
+  close(plan.loan.monthly, -calc.PMT(0.026 / 12, 300, 375000));
+});
+
+test('Deferred-payment condo: 20% upfront (5% cash), 5% at TOP, bank loan from TOP, ABSD in cash', () => {
+  const s = data.sample();
+  const g = { id: 'c', type: 'property', name: 'Condo', amount: 1500000, inYears: 2,
+    property: { scheme: 'condo_dps', absd: 'sc2', owner: 'client' } };
+  const plan = calc.propertyPlan(g, s);
+  const [buy, top] = plan.stages;
+  close(buy.cash, 75000 + 300000 + 4000 + 800); // 5% cash + ABSD 20% + fees
+  close(buy.cpf, 225000 + 44600); // 15% + BSD
+  close(top.total, 75000);
+  assert.equal(plan.loan.startT, 6);
+  assert.equal(plan.loan.type, 'bank');
+});
+
+test('Home purchase flows through the timeline: OA used first, loan from key collection', () => {
+  const s = data.sample();
+  s.goals.push({ id: 'home', type: 'property', name: 'BTO', amount: 400000, inYears: 1, property: { scheme: 'bto_hdb', keyYears: 3, owner: 'joint' } });
+  const base = calc.simulate(data.sample());
+  const sim = calc.simulate(s);
+  const row = (x, age) => x.rows.find((r) => r.age === age);
+  assert.ok(row(sim, 27).flows.homeCpf > 0);
+  assert.ok(row(sim, 31).flows.homeCpf > 0); // instalments from OA after key collection
+  assert.ok(row(sim, 31).flows.loans >= row(base, 31).flows.loans);
+  assert.equal(row(sim, 29).flows.loans, row(base, 29).flows.loans);
+  const m = calc.computeAll(s);
+  const goal = m.goals.find((x) => x.id === 'home');
+  assert.ok(goal.home && goal.setAside > 0);
+  const aff = calc.propertyAffordability(goal.home, m.cashflow);
+  assert.ok(aff.msr > 0 && aff.msr < 1);
+});

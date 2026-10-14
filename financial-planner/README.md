@@ -106,6 +106,29 @@ To update rates when CPF or IRAS publish new figures, edit `js/config.js` only.
 - **Top 3 moves** lead with the strongest action from each area, including
   saving more and investing idle cash, so insurance can't fill every spot.
 
+## Home purchase goal
+
+Under Goals, **Buy a home (HDB / condo)** plans a purchase stage by stage:
+
+| Scheme | At signing / purchase | At key collection / TOP | Loan |
+| --- | --- | --- | --- |
+| HDB BTO, staggered downpayment | 5% | 20% | HDB, 75%, from keys |
+| HDB BTO, HDB loan | 10% | 15% | HDB, 75%, from keys |
+| HDB BTO, bank loan | 25% (5% cash) | | Bank, 75%, from keys |
+| HDB resale (HDB or bank loan) | 25% (bank: 5% cash) | | From completion |
+| New launch condo, deferred payment | 20% (5% cash) | 5% second downpayment | Bank, 75%, from TOP |
+| Resale condo | 25% (5% cash) | | Bank, from completion |
+
+Each stage lists the downpayment, buyer's stamp duty (IRAS tiers, payable
+from CPF), ABSD by buyer profile (cash), legal and other fees, grants
+(deducted from the earliest stage) and renovation at keys. It shows what must
+be cash and what CPF OA may pay. On the timeline, OA pays what it holds at the
+time and the rest comes out of cash. Instalments start at key collection or
+completion, with a chosen share paid from OA. Mortgage servicing (30% cap for
+HDB and ECs) and total debt servicing (55% cap) are checked at the stress rate
+(3% HDB, 4% bank) on today's gross income. Deferred payment is shown only where
+a developer offers it: MAS has restricted it since 2007.
+
 ## Dividend-only retirement
 
 On the Retirement page, **Live on dividends only** moves the nest egg (cash

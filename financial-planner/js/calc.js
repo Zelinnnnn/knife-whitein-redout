@@ -47,6 +47,7 @@
 
   var GOAL_TYPES = [
     { id: 'wedding', label: 'Wedding', amount: 30000, inYears: 3, repeat: 1 },
+    { id: 'property', label: 'Buy a home (HDB / condo)', amount: 450000, inYears: 2, repeat: 1 },
     { id: 'housing', label: 'Home down payment', amount: 80000, inYears: 4, repeat: 1 },
     { id: 'renovation', label: 'Renovation', amount: 50000, inYears: 5, repeat: 1 },
     { id: 'car', label: 'Car', amount: 120000, inYears: 5, repeat: 1 },
@@ -354,7 +355,106 @@
     };
   }
 
-  function goalSchedule(goal, inflation) {
+  // ---------------------------------------------------------- home purchase
+
+  function propertyScheme(id) {
+    var list = CFG.property.schemes;
+    return list.find(function (x) { return x.id === id; }) || list[0];
+  }
+
+  function bsdFor(price) {
+    var tax = 0, lo = 0;
+    CFG.property.bsd.forEach(function (b) {
+      if (price > lo) tax += (Math.min(price, b.upTo) - lo) * b.rate;
+      lo = b.upTo;
+    });
+    return Math.round(tax);
+  }
+
+  /*
+   * Payment plan for a home purchase goal: what is paid at signing and at key
+   * collection, split into cash (must be cash) and CPF OA (may come from OA;
+   * any OA shortfall is paid in cash on the timeline), then a loan that starts
+   * at key collection.
+   */
+  function propertyPlan(goal, state) {
+    var P = goal.property || {}, sc = propertyScheme(P.scheme);
+    var price = Math.max(0, num(goal.amount));
+    var t0 = Math.max(0, Math.round(num(goal.inYears)));
+    var keyYears = sc.keyYears > 0 ? Math.max(0, Math.round(num(P.keyYears, sc.keyYears))) : 0;
+    var tk = t0 + keyYears;
+    var loanCfg = CFG.property.loans[sc.loan];
+    var loanPct = clamp(num(P.loanPct, 0.75), 0, 0.75);
+    var downPct = 1 - loanPct;
+    var stages = sc.stages.map(function (st) { return Object.assign({}, st); });
+    // Borrowing less than 75% adds the extra to the last stage.
+    var schemePct = sum(stages, function (x) { return x.pct; });
+    stages[stages.length - 1].pct += downPct - schemePct;
+    var grants = Math.max(0, num(P.grants));
+    var absd = CFG.property.absd.find(function (x) { return x.id === P.absd; }) || CFG.property.absd[0];
+    var fees = CFG.property.fees[sc.kind];
+    var bsd = bsdFor(price), absdAmt = Math.round(price * absd.rate);
+    var legal = blank(P.legal) ? fees.legal : num(P.legal), other = blank(P.otherFees) ? fees.other : num(P.otherFees);
+    var reno = num(P.renovation);
+    var grantLeft = grants;
+    var out = stages.map(function (st, i) {
+      var amt = st.pct * price;
+      var g = Math.min(grantLeft, amt); grantLeft -= g; amt -= g;
+      var cashMin = Math.min(amt, st.minCash * price);
+      var lines = [{ label: (st.at === 'key' ? 'Downpayment (' : 'Downpayment (') + Math.round(st.pct * 1000) / 10 + '% of price)', amount: st.pct * price, cash: cashMin, cpf: amt - cashMin }];
+      if (g > 0) lines.push({ label: 'Less housing grants', amount: -g, cash: 0, cpf: 0 });
+      var stage = { t: st.at === 'key' ? tk : t0, label: st.label, lines: lines };
+      if (i === 0) {
+        lines.push({ label: 'Buyer’s stamp duty', amount: bsd, cash: 0, cpf: bsd });
+        if (absdAmt) lines.push({ label: 'Additional buyer’s stamp duty (' + absd.label.toLowerCase() + ')', amount: absdAmt, cash: absdAmt, cpf: 0 });
+        lines.push({ label: 'Legal and conveyancing fees', amount: legal, cash: legal, cpf: 0 });
+        if (other) lines.push({ label: 'Valuation, option and admin fees', amount: other, cash: other, cpf: 0 });
+      }
+      return stage;
+    });
+    if (keyYears === 0 && out.length > 1) out.forEach(function (x) { x.t = t0; });
+    var last = out[out.length - 1];
+    if (reno) {
+      var keyStage = out.find(function (x) { return x.t === tk; }) || last;
+      keyStage.lines.push({ label: 'Renovation and furnishing', amount: reno, cash: reno, cpf: 0 });
+    }
+    out.forEach(function (x) {
+      x.cash = sum(x.lines, function (l) { return l.cash; });
+      x.cpf = sum(x.lines, function (l) { return l.cpf; });
+      x.total = x.cash + x.cpf;
+    });
+    var rate = blank(P.rate) ? loanCfg.rate : num(P.rate);
+    var years = Math.max(1, Math.round(blank(P.tenure) ? loanCfg.years : num(P.tenure)));
+    var principal = loanPct * price;
+    var monthly = principal > 0 ? -PMT(rate / 12, years * 12, principal) : 0;
+    var cpfShare = clamp(num(P.cpfShare, 1), 0, 1);
+    var stressMonthly = principal > 0 ? -PMT(loanCfg.stressRate / 12, years * 12, principal) : 0;
+    return {
+      scheme: sc, price: price, stages: out, bsd: bsd, absd: absdAmt, grants: grants,
+      upfrontCash: sum(out, function (x) { return x.cash; }), upfrontCpf: sum(out, function (x) { return x.cpf; }),
+      loan: { type: sc.loan, label: loanCfg.label, startT: tk, years: years, rate: rate, principal: principal,
+        monthly: monthly, cpfMonthly: monthly * cpfShare, stressMonthly: stressMonthly, stressRate: loanCfg.stressRate,
+        totalInterest: monthly * years * 12 - principal },
+      owner: P.owner || 'joint', keyYears: keyYears,
+    };
+  }
+
+  // Mortgage and total debt servicing checks on today's gross income.
+  function propertyAffordability(plan, cashflow) {
+    var income = cashflow.gross;
+    var msr = income > 0 ? plan.loan.stressMonthly / income : null;
+    var tdsr = income > 0 ? (plan.loan.stressMonthly + cashflow.loanTotal) / income : null;
+    return {
+      income: income, msr: msr, tdsr: tdsr, msrApplies: plan.scheme.kind === 'hdb',
+      msrOk: msr === null ? null : msr <= CFG.property.msr, tdsrOk: tdsr === null ? null : tdsr <= CFG.property.tdsr,
+      maxLoanMsr: income > 0 ? PV(plan.loan.stressRate / 12, plan.loan.years * 12, -income * CFG.property.msr) : 0,
+    };
+  }
+
+  function goalSchedule(goal, inflation, state) {
+    if (goal.type === 'property' && state) {
+      return propertyPlan(goal, state).stages.map(function (x) { return { t: x.t, amount: x.total, cash: x.cash, cpf: x.cpf, label: x.label }; });
+    }
     var years = Math.max(0, Math.round(num(goal.inYears))), repeat = Math.max(1, Math.round(num(goal.repeat, 1)));
     var out = [];
     for (var k = 0; k < repeat; k++) {
@@ -364,8 +464,12 @@
     return out;
   }
 
-  function goalSetAside(goal, inflation) {
+  function goalSetAside(goal, inflation, state) {
     var years = Math.max(0, Math.round(num(goal.inYears)));
+    if (goal.type === 'property' && state) {
+      // Only the cash part needs saving up; CPF OA covers the rest.
+      return sum(propertyPlan(goal, state).stages, function (x) { return x.t > 0 ? x.cash / x.t / 12 : 0; });
+    }
     if (years <= 0) return 0;
     var total = sum(goalSchedule(goal, inflation), function (x) { return x.amount; });
     return total / years / 12;
@@ -439,7 +543,7 @@
     var protectionPrem = sum(activePolicies.filter(function (p) { return policyType(p.type).group === 'protection'; }), function (p) { return annual(p.premium, p.freq); }) / 12;
     var savingsPrem = sum(activePolicies.filter(function (p) { return policyType(p.type).group === 'savings'; }), function (p) { return annual(p.premium, p.freq); }) / 12;
     var investing = sum(ps, function (p) { return p.age < p.retireAge ? p.invest : 0; });
-    var goalsMonthly = sum(state.goals || [], function (g) { return goalSetAside(g, a.inflation); });
+    var goalsMonthly = sum(state.goals || [], function (g) { return goalSetAside(g, a.inflation, state); });
 
     var fixedItems = sum(items.filter(function (i) { return i.kind === 'fixed'; }), function (i) { return i.monthly; });
     var variable = sum(items.filter(function (i) { return i.kind === 'variable'; }), function (i) { return i.monthly; });
@@ -734,7 +838,8 @@
     var cash = nw.liquid, inv = nw.investments;
     var cpf = {}; ps.forEach(function (p) { cpf[p.key] = initCpf(p); });
     var aliveLast = {}; ps.forEach(function (p) { aliveLast[p.key] = true; });
-    var goals = (state.goals || []).map(function (g) { return { goal: g, schedule: goalSchedule(g, a.inflation) }; });
+    var goals = (state.goals || []).filter(function (g) { return g.type !== 'property'; }).map(function (g) { return { goal: g, schedule: goalSchedule(g, a.inflation) }; });
+    var homes = (state.goals || []).filter(function (g) { return g.type === 'property'; }).map(function (g) { return { goal: g, plan: propertyPlan(g, state) }; });
     var goalStatus = {};
     var evWho = ps.find(function (p) { return p.key === sc.who; });
     var evT = sc.age - evWho.age;
@@ -855,6 +960,27 @@
             events.push({ kind: 'goal', label: g.goal.name || 'Goal', amount: s.amount, id: g.goal.id });
           }
         });
+      });
+
+      // Home purchases: CPF OA pays what it can of each stage and of the loan
+      // instalments; the rest is cash.
+      f.homeCpf = 0;
+      function drawOa(owner, need) {
+        var keys = (owner === 'joint' ? ps.map(function (p) { return p.key; }) : [owner]).filter(function (k) { return cpf[k] && aliveLast[k]; });
+        keys.forEach(function (k) { var d = Math.min(need, cpf[k].oa); cpf[k].oa -= d; need -= d; f.homeCpf += d; });
+        return need;
+      }
+      homes.forEach(function (h) {
+        h.plan.stages.forEach(function (st) {
+          if (st.t !== t) return;
+          f.goals += st.cash + drawOa(h.plan.owner, st.cpf);
+          events.push({ kind: 'goal', label: (h.goal.name || 'Home') + ': ' + st.label, amount: st.total, id: h.goal.id });
+        });
+        var L = h.plan.loan;
+        if (L.principal > 0 && t >= L.startT && t < L.startT + L.years) {
+          if (t === L.startT) events.push({ kind: 'goal-loan', label: (h.goal.name || 'Home') + ': ' + L.label + ' repayments start' });
+          f.loans += (L.monthly - L.cpfMonthly) * 12 + drawOa(h.plan.owner, L.cpfMonthly * 12);
+        }
       });
 
       // Dividend-only retirement: at retirement the pot moves into an income
@@ -1056,14 +1182,15 @@
   function goalsAnalysis(state, sim) {
     var a = assumptions(state), client = people(state)[0];
     return (state.goals || []).map(function (g) {
-      var sched = goalSchedule(g, a.inflation);
+      var sched = goalSchedule(g, a.inflation, state);
       var total = sum(sched, function (s) { return s.amount; });
       var years = Math.max(0, Math.round(num(g.inYears)));
+      var home = g.type === 'property' ? propertyPlan(g, state) : null;
       return {
-        id: g.id, name: g.name, type: g.type, age: client.age + years, years: years, repeat: sched.length,
-        today: num(g.amount) * sched.length, future: total,
-        setAside: goalSetAside(g, a.inflation),
-        setAsideInvested: years > 0 ? Math.max(0, -PMT(a.preRetReturn / 12, years * 12, 0, total, 0)) : 0,
+        id: g.id, name: g.name, type: g.type, age: client.age + years, years: years, repeat: home ? 1 : sched.length,
+        today: home ? total : num(g.amount) * sched.length, future: total, home: home,
+        setAside: goalSetAside(g, a.inflation, state),
+        setAsideInvested: years > 0 ? Math.max(0, -PMT(a.preRetReturn / 12, years * 12, 0, home ? home.stages[0].cash : total, 0)) : 0,
         status: sim.goalStatus[g.id] || null,
       };
     });
@@ -1290,6 +1417,6 @@
     goalSchedule: goalSchedule, goalSetAside: goalSetAside, retirementSpending: retirementSpending, scenarioDefaults: scenarioDefaults, normalizeScenario: normalizeScenario,
     simulate: simulate, nestEggTarget: nestEggTarget, retirementAnalysis: retirementAnalysis, resourcesAt: resourcesAt,
     goalsAnalysis: goalsAnalysis, healthCheck: healthCheck, healthScore: healthScore, computeAll: computeAll,
-    NEED_ITEMS: NEED_ITEMS, stressState: stressState, incomeStrategy: incomeStrategy, hospitalAgeFactor: hospitalAgeFactor, NEED_RISKS: NEED_RISKS, coverNeeds: coverNeeds, spendingPattern: spendingPattern, lifePlan: lifePlan, emergencyReserve: emergencyReserve, payoutStartAge: payoutStartAge, says: says,
+    NEED_ITEMS: NEED_ITEMS, CFG_SCHEMES: CFG.property.schemes, propertyPlan: propertyPlan, propertyAffordability: propertyAffordability, bsdFor: bsdFor, propertyScheme: propertyScheme, stressState: stressState, incomeStrategy: incomeStrategy, hospitalAgeFactor: hospitalAgeFactor, NEED_RISKS: NEED_RISKS, coverNeeds: coverNeeds, spendingPattern: spendingPattern, lifePlan: lifePlan, emergencyReserve: emergencyReserve, payoutStartAge: payoutStartAge, says: says,
   };
 });
