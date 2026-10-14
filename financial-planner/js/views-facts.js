@@ -34,7 +34,7 @@
           <${TF} label="Name" path=${base + 'name'} value=${p.name} placeholder=${key === 'client' ? 'You' : 'Spouse'} onChange=${function (v) { api.set(base + 'name', v); }} />
           <${NF} label="Age" path=${base + 'age'} prefix="" suffix="years" value=${p.age} onChange=${function (v) { api.set(base + 'age', v); }} />
           <${NF} label="Retirement age" path=${base + 'retireAge'} prefix="" suffix="years" value=${p.retireAge} hint="Salary and CPF contributions stop" onChange=${function (v) { api.set(base + 'retireAge', v); }} />
-          <${NF} label="Plan to age" path=${base + 'lifeExpectancy'} prefix="" suffix="years" value=${p.lifeExpectancy} hint="Life expectancy for planning" onChange=${function (v) { api.set(base + 'lifeExpectancy', v); }} />
+          <${NF} label="Plan to age" path=${base + 'lifeExpectancy'} prefix="" suffix="years" value=${p.lifeExpectancy} hint="Plan past average life expectancy (default 95) so savings don't run out early" onChange=${function (v) { api.set(base + 'lifeExpectancy', v); }} />
         </div>
         <div class="field"><span class="label">Gender (sets CareShield Life premiums)</span>
           <${ui.Seg} label="Gender" value=${p.gender || 'male'} options=${[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} onChange=${function (v) { api.set(base + 'gender', v); }} />
@@ -407,6 +407,24 @@
     </div>`;
   }
 
+  // Who relies on this person's income. Death cover is only sized once answered.
+  function DependantsEditor(props) {
+    var p = props.p, api = props.api, d = p.dependants, base = 'needs.' + p.key + '.dependants.';
+    function set(k, v) { api.update('needs.' + p.key + '.dependants', function (x) { var n = Object.assign({}, x || {}); n[k] = v; n.answered = true; return n; }); }
+    var id = function (k) { return 'dep-' + p.key + '-' + k; };
+    return html`<div class=${'stack' + (d.answered ? '' : ' banner')} style="gap:8px">
+      <div class="label" style="font-weight:600">Who depends on ${p.name}’s income?</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center">
+        <${ui.Check} label="Partner" id=${id('spouse')} checked=${d.spouse} onChange=${function (v) { set('spouse', v); }} />
+        <${ui.Check} label="Parents" id=${id('parents')} checked=${d.parents} onChange=${function (v) { set('parents', v); }} />
+        <${NF} bare cls="short" label="Number of children" id=${id('children')} prefix="" suffix="children" value=${d.children} onChange=${function (v) { set('children', v); }} />
+        ${d.children > 0 && html`<${NF} bare cls="short" label="Youngest child's age" id=${id('youngest')} prefix="youngest" suffix="yrs" allowBlank value=${d.youngest === null ? '' : d.youngest} onChange=${function (v) { set('youngest', v); }} />`}
+        ${!d.answered && html`<button type="button" class="btn sm" onClick=${function () { set('spouse', false); }}>No one</button>`}
+      </div>
+      <span class="hint">${!d.answered ? 'Death cover is not sized until this is answered.' : !d.any ? 'No dependants: death cover only needs to clear debts and final costs.' : d.children > 0 ? 'Family support runs until the youngest child is 22.' : 'Family support runs ' + (d.parents ? '10' : '5') + ' years.'}</span>
+    </div>`;
+  }
+
   function PersonCover(props) {
     var p = props.p, api = props.api, a = props.a;
     var rs = useState('death'), risk = rs[0], setRisk = rs[1];
@@ -416,10 +434,12 @@
       tools=${html`<${ui.Seg} label=${'How to size ' + p.name + '’s cover'} value=${p.method}
         options=${[{ value: 'multiple', label: 'Quick rule', title: a.deathMultiple + '× income for death and TPD, ' + a.ciMultiple + '× for critical illness' }, { value: 'needs', label: 'Detailed needs', title: 'Build the need item by item' }]}
         onChange=${function (v) { api.set('needs.' + p.key + '.method', v); }} />`}>
+      <${DependantsEditor} p=${p} api=${api} />
       <div class="compare">
         <span>Quick rule: death <b>${compact(p.rule.death)}</b> · CI <b>${compact(p.rule.ci)}</b></span>
         <span>Detailed needs: death <b>${compact(p.detailed.death)}</b> · TPD <b>${compact(p.detailed.tpd)}</b> · CI <b>${compact(p.detailed.ci)}</b></span>
       </div>
+      ${!detailed && p.dependants.answered && p.dependants.any && p.dependants.children === 0 && p.detailed.death < p.rule.death * 0.7 && html`<p class="small" style="color:var(--warning-ink)">The quick rule assumes long-term dependants such as young children. With ${p.dependants.parents ? 'parents' : 'only a partner'} relying on this income, Detailed needs gives ${compact(p.detailed.death)} for death cover.</p>`}
       ${detailed && html`<div class="stack" style="gap:12px">
         <${ui.Seg} label="Risk" value=${risk} onChange=${setRisk}
           options=${calc.NEED_RISKS.map(function (r) { return { value: r.id, label: RISK_SHORT[r.id], title: r.label }; })} />
@@ -430,7 +450,7 @@
         ${lumps.map(function (r) {
           return html`<${charts.Bullet} label=${r.id === 'tpd' ? 'Total & permanent disability (TPD)' : r.label} value=${r.current} target=${r.target} cls=${'fill-' + r.status}
             valueText=${coverText(r)} targetText=${r.unit === 'month' ? money(r.target) + '/mth' : money(r.target)}
-            foot=${html`<${ui.Pill} status=${r.status}>${r.status === 'good' ? 'On target' : 'Short by ' + money(r.gap)}</${ui.Pill}>`} />`;
+            foot=${html`<${ui.Pill} status=${r.status}>${r.unconfirmed ? 'Answer who depends on this income' : r.status === 'good' ? 'On target' : 'Short by ' + money(r.gap)}</${ui.Pill}>`} />`;
         })}
       </div>
       <div class="checks">
@@ -625,10 +645,19 @@
     var unit = today ? 'today’s dollars' : 'future dollars';
     var atRet = function (v) { return today ? v / b.deflator : v; };
     var atAge = function (v, age) { return today ? v / Math.pow(1 + a.inflation, age - client.age) : v; };
-    var incomeRows = (b.path || []).map(function (x) {
+    var inc = R.income, divMode = inc.mode === 'dividends';
+    var sb = m.stress.retirement;
+    var incomeRows = (b.path || []).map(function (x, k) {
+      var needOver = Math.max(0, x.spending - x.payouts);
+      var div = divMode ? b.resources.total * inc.yield * Math.pow(1 + inc.growth, k) : needOver;
+      var fromPot = Math.min(div, needOver);
       return { age: x.age, t: x.age - client.age, spending: atAge(x.spending, x.age), payouts: atAge(Math.min(x.payouts, x.spending), x.age),
-        fromSavings: atAge(Math.max(0, x.spending - x.payouts), x.age), rawPayouts: atAge(x.payouts, x.age), events: [] };
+        fromSavings: atAge(fromPot, x.age), rawPayouts: atAge(x.payouts, x.age), dividends: atAge(div, x.age),
+        gap: -atAge(Math.max(0, needOver - fromPot), x.age), events: [] };
     });
+    var potLabel = divMode ? 'From dividends' : 'From the nest egg';
+    var series = [INCOME_SERIES[0], Object.assign({}, INCOME_SERIES[1], { label: potLabel })];
+    var firstGap = divMode ? incomeRows.find(function (x) { return x.gap < -1; }) : null;
     function setStep(i, key, v) {
       var next = steps.map(function (x) { return Object.assign({}, x); });
       next[i][key] = v;
@@ -648,6 +677,24 @@
               <${NF} label="Household spending in retirement" path="retirement.monthlySpending" allowBlank placeholder=${String(Math.round(m.cashflow.livingExpenses))} suffix="/mth"
                 prefix="S$" value=${r.monthlySpending} hint="Today's dollars. Blank uses current spending." onChange=${function (v) { api.set('retirement.monthlySpending', v); }} />
             </div>
+          </${ui.Card}>
+
+          <${ui.Card} title="How retirement is funded" sub="Spend the nest egg down over retirement, or move it into an income portfolio and live only on its dividends.">
+            <${ui.Seg} label="Funding approach" value=${inc.mode} onChange=${function (v) { api.set('retirement.incomeMode', v); }}
+              options=${[{ value: 'drawdown', label: 'Draw down the nest egg', title: 'Capital is spent gradually over retirement' }, { value: 'dividends', label: 'Live on dividends only', title: 'Capital is kept; only the yield is spent' }]} />
+            ${divMode && html`<div class="stack" style="gap:10px">
+              <div class="fields tight">
+                <${NF} label="Dividend yield" path="retirement.dividendYield" percent value=${inc.yield} hint="Paid out each year" onChange=${function (v) { api.set('retirement.dividendYield', v); }} />
+                <${NF} label="Capital growth" path="retirement.capitalGrowth" percent value=${inc.growth} hint="Yearly change in the pot's value" onChange=${function (v) { api.set('retirement.capitalGrowth', v); }} />
+              </div>
+              <${ui.Check} label="Move CPF OA into the portfolio (from 55)" path="retirement.dividendIncludeOa" checked=${inc.includeOa} onChange=${function (v) { api.set('retirement.dividendIncludeOa', v); }} />
+              <dl class="kv">
+                <dt>Pot moved in at ${b.retireAge}</dt><dd>${money(atRet(b.resources.total))}</dd>
+                <dt>Dividend income in the first year</dt><dd>${money(atRet(b.dividendMonthly))}/mth</dd>
+                <dt>Yield needed to cover spending</dt><dd>${b.resources.total > 0 && b.path && b.path.length ? pct(Math.max(0, b.path[0].spending - b.path[0].payouts) / b.resources.total, 1) : '–'}</dd>
+              </dl>
+              <p class="small muted">${firstGap ? 'Dividends fall short of spending from age ' + firstGap.age + '. The capital is not touched, so the shortfall shows as unfunded spending.' : 'Dividends plus CPF LIFE cover planned spending in every year, with the capital left intact.'} Dividends can be cut in a downturn: the stress test lowers the yield by 1 point.</p>
+            </div>`}
           </${ui.Card}>
 
           <${ui.Card} title="How spending changes in retirement" sub="Most retirees spend less in real terms as the years go on. Choose how the plan grows spending after retirement.">
@@ -688,14 +735,15 @@
           </${ui.Card}>
 
           <${ui.Card} title="Retirement income each year" sub=${'Spending (line) against what CPF LIFE pays and what the nest egg must cover, in ' + unit + '.'}>
-            <div class="legend"><span><i class="s2" />CPF LIFE payouts</span><span><i class="s1" />From the nest egg</span><span><i class="line" />Planned spending</span></div>
-            ${incomeRows.length ? html`<${charts.StackedColumns} label="Retirement spending and income by age" rows=${incomeRows} series=${INCOME_SERIES} height=${280}
-              baseline=${function (x) { return x.spending; }}
+            <div class="legend"><span><i class="s2" />CPF LIFE payouts</span><span><i class="s1" />${potLabel}</span>${divMode && html`<span><i class="short" />Not covered</span>`}<span><i class="line" />Planned spending</span></div>
+            ${incomeRows.length ? html`<${charts.StackedColumns} label="Retirement spending and income by age" rows=${incomeRows} series=${series} height=${280}
+              baseline=${function (x) { return x.spending; }} negative=${divMode ? function (x) { return x.gap; } : null}
               tooltip=${function (x) {
                 return html`<div><div class="tt-head">${client.name}, age ${x.age}</div>
                   <div class="tt-row"><i class="key ink" /><span>Planned spending</span><b>${money(x.spending)}</b></div>
                   <div class="tt-row"><i class="key s2" /><span>CPF LIFE</span><b>${money(x.rawPayouts)}</b></div>
-                  <div class="tt-row"><i class="key s1" /><span>From the nest egg</span><b>${money(x.fromSavings)}</b></div>
+                  <div class="tt-row"><i class="key s1" /><span>${potLabel}</span><b>${money(divMode ? x.dividends : x.fromSavings)}</b></div>
+                  ${x.gap < -1 && html`<div class="tt-row"><i class="key short" /><span>Not covered</span><b>${money(x.gap)}</b></div>`}
                   <div class="tt-sep" /><div class="tt-note">A year, in ${unit}</div></div>`;
               }} />` : html`<p class="muted">Set a retirement age before the end of the plan to see this.</p>`}
           </${ui.Card}>
@@ -737,19 +785,21 @@
               <dt>Investments at ${b.retireAge}</dt><dd>${money(atRet(b.resources.investments))}</dd>
               <dt>CPF OA at ${b.retireAge}</dt><dd>${money(atRet(b.resources.cpfOa))}</dd>
               <dt class="total">Plan provides</dt><dd class="total">${money(atRet(b.projected))}</dd>
-              <dt>Nest egg needed</dt><dd>${money(atRet(b.target))}</dd>
+              <dt>${divMode ? 'Pot needed to live on dividends' : 'Nest egg needed'}</dt><dd>${money(atRet(b.target))}</dd>
+              <dt>Stress test (returns −2, inflation +1)</dt><dd>${b.target > 0 ? pct(Math.min(sb.progress, 9.99)) + ' funded' : '–'}</dd>
               <dt>Extra investing to close the gap</dt><dd>${money(b.extraMonthly)}/mth</dd>
             </dl>
+            ${b.resources.oaLocked > 0 && html`<p class="small muted">${money(atRet(b.resources.oaLocked))} of CPF OA is not counted: ${divMode && !inc.includeOa ? 'it stays out of the dividend portfolio. Tick \u201cMove CPF OA into the portfolio\u201d to use it.' : 'it can\u2019t be withdrawn before 55.'}</p>`}
             <p class="small muted">In ${unit}${today ? ' (' + money(b.target) + ' needed in future dollars)' : ''}.</p>
           </${ui.Card}>
-          <${ui.Card} title="How the target is worked out" sub=${'From ' + client.name + '’s retirement at ' + b.retireAge + ' to age ' + R.horizonAge + ', with the fund earning ' + pct(a.postRetReturn, 1) + ' a year.'}>
+          <${ui.Card} title="How the target is worked out" sub=${divMode ? 'The pot whose dividends (' + pct(inc.yield, 1) + ' yield, capital growing ' + pct(inc.growth, 1) + ' a year) cover spending less CPF LIFE in every year to age ' + R.horizonAge + '.' : 'From ' + client.name + '’s retirement at ' + b.retireAge + ' to age ' + R.horizonAge + ', with the fund earning ' + pct(a.postRetReturn, 1) + ' a year.'}>
             <dl class="kv">
               <dt>Spending in today's dollars</dt><dd>${money(R.monthlySpending)}/mth</dd>
               <dt>Spending in the first year of retirement</dt><dd>${money(atRet(b.firstYearSpending) / 12)}/mth</dd>
               <dt>After retirement, spending</dt><dd>${mode === 'flat' ? 'stays flat' : 'grows ' + pct(R.pattern.growth, 1) + ' a year'}</dd>
               ${R.pattern.steps.map(function (st) { return html`<dt>From age ${st.age}</dt><dd>${pct(st.share)} of plan</dd>`; })}
               ${R.payouts.map(function (p) { return html`<dt>${p.name}'s CPF LIFE (${p.plan})</dt><dd>${p.monthly ? '−' + money(atAge(p.monthly, p.from)) + '/mth' : '–'}</dd>`; })}
-              <dt class="total">Nest egg needed at ${b.retireAge}</dt><dd class="total">${money(atRet(b.target))}</dd>
+              <dt class="total">${divMode ? 'Pot needed' : 'Nest egg needed'} at ${b.retireAge}</dt><dd class="total">${money(atRet(b.target))}</dd>
             </dl>
           </${ui.Card}>
           <${ui.Card} title="If I invest more each month" sub=${'Invested at ' + pct(a.preRetReturn) + ' until ' + b.retireAge + '.'}>

@@ -37,7 +37,7 @@
       });
       return Object.assign({}, r, {
         cash: r.cash / f, investments: r.investments / f, cpf: r.cpf / f, total: r.total / f, net: r.net / f,
-        inflow: r.inflow / f, outflow: r.outflow / f, shortfall: r.shortfall / f, reserve: (r.reserve || 0) / f, cpfBy: cpfBy,
+        inflow: r.inflow / f, outflow: r.outflow / f, shortfall: r.shortfall / f, spendable: (r.spendable || 0) / f, reserve: (r.reserve || 0) / f, cpfBy: cpfBy,
         events: r.events.map(function (e) { return e.amount ? Object.assign({}, e, { amount: e.amount / f }) : e; }),
       });
     });
@@ -74,7 +74,7 @@
     return bands;
   }
 
-  function TimelineTooltip(model, baseRows, today) {
+  function TimelineTooltip(model, baseRows, today, baseLabel) {
     return function (r) {
       var base = baseRows && baseRows.find(function (b) { return b.age === r.age; });
       return html`<div>
@@ -86,7 +86,8 @@
         ${r.reserve > 0 && html`<div class="tt-note">Includes ${money(r.reserve)} emergency fund kept aside</div>`}
         <div class="tt-sep" />
         <div class="tt-row"><i /><span>Total</span><b>${money(r.total)}</b></div>
-        ${base && html`<div class="tt-row"><i class="key ink" /><span>Base plan</span><b>${money(base.total)}</b></div>`}
+        ${base && html`<div class="tt-row"><i class="key ink" /><span>${baseLabel}</span><b>${money(base.total)}</b></div>`}
+        <div class="tt-row"><i /><span>Spendable (no MediSave/RA)</span><b>${money(r.spendable)}</b></div>
         <div class="tt-row"><i /><span>Money in</span><b>${money(r.inflow)}</b></div>
         <div class="tt-row"><i /><span>Money out</span><b>${money(r.outflow)}</b></div>
         ${r.events.length > 0 && html`<div class="tt-sep" />`}
@@ -101,7 +102,9 @@
     var today = props.today !== undefined ? props.today : true;
     var sim = props.sim || model.sim;
     var rows = deflateRows(sim.rows, infl, today);
-    var baseRows = props.compare ? deflateRows(model.sim.rows, infl, today) : null;
+    var showStress = !props.compare && props.stress !== false && model.stress;
+    var baseRows = props.compare ? deflateRows(model.sim.rows, infl, today) : showStress ? deflateRows(model.stress.sim.rows, infl + model.stress.shocks.inflationShock, today) : null;
+    var baseLabel = props.compare ? 'Base plan' : 'Stress test';
     return html`<${charts.StackedColumns}
       label=${'Projected cash, investments and CPF by age for ' + names(model)}
       rows=${rows} series=${TIMELINE_SERIES} height=${props.height || 340}
@@ -110,14 +113,14 @@
       lines=${timelineLines(model, sim)} bands=${bandsFor(model)}
       pins=${function (r) { return r.events.some(function (e) { return e.kind === 'goal'; }); }}
       pinLabel=${function (r) { return r.events.filter(function (e) { return e.kind === 'goal'; }).map(function (e) { return e.label; }).join(', '); }}
-      tooltip=${TimelineTooltip(model, baseRows, today)} />`;
+      tooltip=${TimelineTooltip(model, baseRows, today, baseLabel)} />`;
   }
 
   function TimelineLegend(props) {
     return html`<div class="legend">
       <span><i class="s1" />Cash</span><span><i class="s3" />Investments</span><span><i class="s2" />CPF (OA, SA, MA, RA)</span>
       <span><i class="short" />Shortfall</span>
-      ${props.compare && html`<span><i class="line" />Base plan total</span>`}
+      ${props.compare ? html`<span><i class="line" />Base plan total</span>` : props.stress !== false && html`<span><i class="line" />Stress test total (returns −2 pts, inflation +1 pt)</span>`}
       <span><i class="pin" />Goal paid</span>
     </div>`;
   }
@@ -243,6 +246,7 @@
       <div class="hero">
         <${ui.Card} title="Plan health" sub="Each wedge is one area of the plan, scored out of 100. Tap one to open it.">
           <${PlanHealth} model=${m} go=${props.go} />
+          ${m.score.capped && html`<p class="small muted">${m.score.capped === 'shortfall' ? 'Capped at 49 because the money runs out in the base plan.' : 'Held down by the weakest area, so an average cannot hide a gap.'}</p>`}
         </${ui.Card}>
         <${ui.Card} title="Your top 3 moves" sub="The changes that would improve the plan most, in order.">
           <${TopMoves} model=${m} go=${props.go} />
@@ -254,7 +258,7 @@
         <${ui.Kpi} label="Net worth" value=${money(nw.netWorth)} note=${'Assets ' + compact(nw.totalAssets) + ' · Debts ' + compact(nw.totalLiabilities)} />
         <${ui.Kpi} label="Monthly surplus" value=${money(cf.surplus)} note=${html`<${ui.Pill} status=${status('surplus')}>${cf.surplus >= 0 ? 'After saving & goals' : 'Deficit'}</${ui.Pill}>`} />
         <${ui.Kpi} label="Retirement readiness" value=${r.target > 0 ? pct(Math.min(r.progress, 9.99)) : '–'}
-          note=${html`<${ui.Pill} status=${status('retirement')}>${r.target > 0 ? 'Needs ' + compact(today ? rToday : r.target) + (today ? ' in today’s $' : '') + ' at ' + r.retireAge : 'Set retirement spending'}</${ui.Pill}>`} />
+          note=${html`<${ui.Pill} status=${status('retirement')}>${r.target > 0 ? 'Stress test ' + pct(Math.min(m.stress.retirement.progress, 9.99)) : 'Set retirement spending'}</${ui.Pill}><span>${r.target > 0 ? 'Needs ' + compact(today ? rToday : r.target) + (today ? ' today’s $' : '') + ' at ' + r.retireAge : ''}</span>`} />
         <${ui.Kpi} label="Emergency fund" value=${months === null ? '–' : months.toFixed(1) + ' months'} note=${html`<${ui.Pill} status=${status('emergency')}>Aim for ${m.assumptions.emergencyMonths} months</${ui.Pill}>`} />
       </div>
 
@@ -345,12 +349,14 @@
     var sim = active ? m.scenario : m.sim;
     var rows = deflateRows(sim.rows, m.assumptions.inflation, today);
     var baseRows = deflateRows(m.sim.rows, m.assumptions.inflation, today);
+    void baseRows;
     var client = m.people[0];
     var retireRow = rows.find(function (r) { return r.age === client.retireAge - 1; }) || rows[0];
     var peak = rows.reduce(function (best, r) { return r.total > best.total ? r : best; }, rows[0]);
     var end = rows[rows.length - 1];
     var baseEnd = baseRows[baseRows.length - 1];
     var worst = Math.min.apply(null, rows.map(function (r) { return r.shortfall; }).concat([0]));
+    var stressAge = m.stress.sim.shortfallAge;
     var events = [];
     rows.forEach(function (r) { r.events.forEach(function (e) { events.push({ age: r.age, row: r, e: e }); }); });
     var sc = active ? sim.scenario : null;
@@ -378,8 +384,9 @@
         <${ui.Kpi} label=${'At retirement (age ' + client.retireAge + ')'} value=${compact(retireRow.total)} note=${'Cash, investments and CPF' + unit} />
         <${ui.Kpi} label="Peak wealth" value=${compact(peak.total)} note=${'At age ' + peak.age} />
         <${ui.Kpi} label="Savings last until" value=${sim.shortfallAge === null ? 'End of plan' : 'Age ' + sim.shortfallAge}
-          note=${html`<${ui.Pill} status=${sim.shortfallAge === null ? 'good' : 'critical'}>${sim.shortfallAge === null ? 'No shortfall' : 'Shortfall of ' + compact(-worst)}</${ui.Pill}>`} />
-        <${ui.Kpi} label=${'Left at age ' + end.age} value=${compact(end.total)} note=${active ? 'Base plan: ' + compact(baseEnd.total) : 'Before any bequests'} />
+          note=${html`<${ui.Pill} status=${sim.shortfallAge === null ? (stressAge === null ? 'good' : 'warning') : 'critical'}>${sim.shortfallAge === null ? (stressAge === null ? 'Even under the stress test' : 'Stress test: runs out at ' + stressAge) : 'Shortfall of ' + compact(-worst)}</${ui.Pill}>`} />
+        <${ui.Kpi} label=${'Spendable at age ' + end.age} value=${end.spendable < 0 ? '−' + compact(-end.spendable) : compact(end.spendable)}
+          note=${end.spendable < 0 ? 'Unfunded spending by then' : 'Cash, investments and CPF OA' + (active ? ' · base ' + compact(baseEnd.spendable) : '')} />
       </div>
 
       <${ui.Card} title=${active ? 'Timeline under this scenario' : 'Projected wealth by age'}
@@ -432,7 +439,7 @@
         <div class="kpis">
           <${ui.Kpi} label="Net worth" value=${money(nw.netWorth)} />
           <${ui.Kpi} label="Monthly surplus" value=${money(cf.surplus)} />
-          <${ui.Kpi} label="Retirement readiness" value=${r.target > 0 ? pct(Math.min(r.progress, 9.99)) : '–'} />
+          <${ui.Kpi} label="Retirement readiness" value=${r.target > 0 ? pct(Math.min(r.progress, 9.99)) : '–'} note=${r.target > 0 ? 'Stress test: ' + pct(Math.min(m.stress.retirement.progress, 9.99)) : ''} />
           <${ui.Kpi} label="Savings last until" value=${m.sim.shortfallAge === null ? 'End of plan' : 'Age ' + m.sim.shortfallAge} />
         </div>
         <div class="grid cols-2">

@@ -105,7 +105,7 @@ test('Protection targets match the Financial Health Check', () => {
 test('Simulation produces finite rows to life expectancy', () => {
   const s = data.sample();
   const sim = calc.simulate(s);
-  const horizon = Math.max(85 - 26, 88 - 25);
+  const horizon = Math.max(95 - 26, 95 - 25);
   assert.equal(sim.rows.length, horizon);
   for (const r of sim.rows) {
     for (const k of ['cash', 'investments', 'cpf', 'total']) assert.ok(Number.isFinite(r[k]), `${k} at age ${r.age}`);
@@ -162,8 +162,8 @@ test('Detailed needs: death defaults build up from the plan', () => {
   const item = (id) => d.items.find((i) => i.id === id);
   assert.equal(item('mortgage').total, 300000); // joint home loan cleared in full
   assert.equal(item('final').total, 10000);
-  assert.equal(item('support').duration, 10);
-  close(item('support').total, item('support').monthly * 12 * 10);
+  assert.equal(item('support').duration, 5); // partner relies on this income, no children
+  close(item('support').total, item('support').monthly * 12 * 5);
   assert.equal(jamie.needs.death.items.find((i) => i.id === 'debts').total, 12000); // Jamie's study loan
   // CI: CPF share of the home loan must be paid in cash while recovering
   const cpfLoan = alex.needs.ci.items.find((i) => i.id === 'cpfLoan');
@@ -214,9 +214,10 @@ test('CPF LIFE plans: escalating starts lower and grows 2% a year', () => {
 test('Health score and prioritised actions', () => {
   const m = calc.computeAll(data.sample());
   assert.ok(m.score.overall > 0 && m.score.overall <= 100);
-  assert.equal(m.score.areas.length, 6);
-  const w = m.health.recommendations.map((r) => r.weight);
-  assert.deepEqual(w, [...w].sort((a, b) => b - a));
+  assert.equal(m.score.areas.length, 7);
+  const recs = m.health.recommendations;
+  const lead = recs.slice(0, 3).map((r) => r.area);
+  assert.equal(new Set(lead).size, lead.length, 'top moves come from different areas');
   assert.ok(m.health.recommendations.every((r) => r.go));
 });
 
@@ -272,4 +273,79 @@ test('Ring-fenced emergency fund is never spent', () => {
   sim.rows.filter((r) => r.age < first.age).forEach((r) => assert.ok(r.cash >= 15000 - 0.01));
   const plain = calc.simulate({ ...s, assumptions: { ...s.assumptions, ringFence: false } });
   assert.ok(sim.shortfallAge <= plain.shortfallAge);
+});
+
+
+test('Stress test runs with weaker markets and is reported', () => {
+  const m = calc.computeAll(data.sample());
+  assert.ok(m.stress.retirement.progress < m.retirement.base.progress);
+  assert.ok(m.health.items.some((i) => i.id === 'stress'));
+});
+
+test('Score fails hard when money runs out', () => {
+  const s = data.sample();
+  s.retirement.monthlySpending = 12000;
+  const m = calc.computeAll(s);
+  assert.ok(m.sim.shortfallAge !== null);
+  assert.ok(m.score.overall <= 49);
+  assert.equal(m.score.capped, 'shortfall');
+});
+
+test('Spendable wealth excludes MediSave and RA', () => {
+  const r = calc.simulate(data.sample()).rows.at(-1);
+  const oa = Object.values(r.cpfBy).reduce((t, c) => t + c.oa, 0);
+  close(r.spendable, r.cash + r.investments + oa);
+  assert.ok(r.spendable < r.net);
+});
+
+test('No dependants: death cover only clears debts and final costs', () => {
+  const s = data.sample();
+  s.needs.spouse.dependants = { answered: true, spouse: false, children: 0, parents: false };
+  const cf = calc.cashflowAnalysis(s);
+  const jamie = calc.protectionAnalysis(s, cf)[1];
+  assert.equal(jamie.rule.death, 22000); // S$12,000 study loan + S$10,000 final costs
+  assert.equal(jamie.needs.death.items.find((i) => i.id === 'support').total, 0);
+});
+
+test('Unanswered dependants: death row is unconfirmed, not a gap', () => {
+  const s = data.sample();
+  delete s.needs.client.dependants;
+  const m = calc.computeAll(s);
+  const row = m.protection[0].rows.find((r) => r.id === 'death');
+  assert.equal(row.status, 'neutral');
+  assert.ok(m.health.recommendations.some((r) => r.text.startsWith('Confirm who depends on Alex')));
+  assert.ok(!m.health.recommendations.some((r) => r.text.startsWith('Alex: death cover')));
+});
+
+test('CPF OA is not counted for retirement before 55', () => {
+  const s = data.sample();
+  s.people.client.retireAge = 45;
+  s.people.spouse.retireAge = 45;
+  const b = calc.computeAll(s).retirement.base;
+  assert.equal(b.resources.cpfOa, 0);
+  assert.ok(b.resources.oaLocked > 0);
+});
+
+test('Hospital premiums rise with age and inflation', () => {
+  const s = data.sample(); s.hasSpouse = false;
+  s.policies = s.policies.filter((p) => p.type === 'hospital' && p.owner === 'client');
+  const rows = calc.simulate(s).rows;
+  const at = (age) => rows.find((r) => r.age === age).flows.premiums;
+  assert.equal(at(26), 900);
+  close(at(75) / at(26), 7.5 * Math.pow(1.03, 49), 0.001);
+});
+
+test('Dividend-only retirement keeps capital and lives on yield', () => {
+  const s = data.sample();
+  s.retirement.incomeMode = 'dividends'; s.retirement.dividendYield = 0.04; s.retirement.capitalGrowth = 0;
+  const sim = calc.simulate(s);
+  const r55 = sim.rows.find((r) => r.age === 55), r56 = sim.rows.find((r) => r.age === 56);
+  assert.ok(r55.events.some((e) => e.kind === 'income'));
+  close(r56.flows.dividends, r55.investments * 0.04, 1);
+  assert.equal(r56.flows.drawdown, 0);
+  const b = calc.computeAll(s).retirement.base;
+  assert.equal(b.mode, 'dividends');
+  // Pot needed covers the largest yearly gap at a 4% yield.
+  const worst = Math.max(...b.path.map((x) => Math.max(0, x.spending - x.payouts)));
+  close(b.target, worst / 0.04, 1);
 });

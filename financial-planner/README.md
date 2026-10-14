@@ -81,6 +81,41 @@ financial-planner/
 
 To update rates when CPF or IRAS publish new figures, edit `js/config.js` only.
 
+## Honest headline numbers
+
+- **Conservative defaults**: returns 5% before and 4% after retirement (about
+  2 and 1 points above 3% inflation), 70% of the monthly surplus saved, and
+  planning to age 95.
+- **Stress test** beside every projection: returns 2 points lower and
+  inflation 1 point higher (dividend yield 1 point lower). Readiness, the
+  timeline (black line) and the health check all show it.
+- **Plan health score** includes "Money lasts". The overall score is capped at
+  40 points above the weakest area, and at 49 if the money runs out, so an
+  average cannot hide a failing area.
+- **Spendable at age X** counts cash (net of any shortfall), investments and
+  CPF OA only. MediSave and the RA can't be spent.
+- **Dependants**: each Protection card asks who depends on the person's income.
+  Death cover is not sized until this is answered. With no dependants it only
+  clears debts and final costs. Family support runs until the youngest child
+  is 22, otherwise 10 years for parents or 5 for a partner.
+- **CPF OA before 55** is not counted towards retirement for anyone younger than
+  55 at retirement.
+- **Hospital plan premiums** rise with age along a typical Integrated Shield +
+  rider curve (about 7.5× the age-30 premium by 75) and with inflation.
+  MediShield Life uses the MOH schedule from April 2025.
+- **Top 3 moves** lead with the strongest action from each area, including
+  saving more and investing idle cash, so insurance can't fill every spot.
+
+## Dividend-only retirement
+
+On the Retirement page, **Live on dividends only** moves the nest egg (cash
+above any ring-fenced emergency fund, investments, and optionally CPF OA from
+55) into an income portfolio at retirement. Each year it pays the chosen
+dividend yield (default 4%) and its capital grows at the chosen rate (default
+1%). Capital is never drawn: if dividends plus CPF LIFE fall short of spending,
+the gap shows as unfunded spending. The pot needed is the one whose dividends
+cover spending less CPF LIFE in every year of retirement.
+
 ## Savings rules and CPF LIFE start age
 
 - **What happens to the surplus** (Cashflow page): the share of each year's

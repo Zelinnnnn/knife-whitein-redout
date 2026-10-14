@@ -87,6 +87,7 @@
   function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
   function policyType(id) { return POLICY_TYPES.find(function (t) { return t.id === id; }) || POLICY_TYPES[0]; }
   function wardRank(id) { var w = CFG.wards.find(function (x) { return x.id === id; }); return w ? w.rank : 0; }
+  function hospitalAgeFactor(age) { return band(CFG.cpf.hospitalPremiumCurve, age).factor; }
   function lifePlan(id) { return CFG.cpf.lifePlans[id] || CFG.cpf.lifePlans.standard; }
   // "You retire" but "Alex retires".
   function says(name, third, base) { return name + ' ' + (name === 'You' ? base : third); }
@@ -133,7 +134,7 @@
         age: age,
         gender: p.gender === 'female' ? 'female' : 'male',
         retireAge: Math.round(num(p.retireAge, 63)),
-        lifeExpectancy: Math.max(age + 1, Math.round(num(p.lifeExpectancy, 85))),
+        lifeExpectancy: Math.max(age + 1, Math.round(num(p.lifeExpectancy, CFG.defaults.planToAge))),
         income: Object.assign({ salary: 0, bonus: 0, business: 0, dividends: 0, interest: 0, rental: 0, others: 0 }, (state.income || {})[key] || {}),
         invest: num((state.investing || {})[key]),
         cpfIn: Object.assign({ oa: 0, sa: 0, ma: 0, ra: 0, retirementSum: 'FRS', careshieldSupplement: 0, lifeMonthly: 0, lifePlan: 'standard', payoutStart: 65 }, (state.cpf || {})[key] || {}),
@@ -237,7 +238,7 @@
 
   function medisaveDeductions(p, age, year, hasIsp) {
     var c = CFG.cpf;
-    var mshl = band(c.medishield, age).premium;
+    var mshl = band(c.medishield, age + 1).premium;
     var cs = c.careshield, csl = 0;
     if (age >= cs.fromAge && age < cs.toAge) {
       csl = cs[p.gender] * Math.pow(1 + cs.growth, Math.min(year, cs.growthUntilYear) - 2020) + num(p.cpfIn.careshieldSupplement);
@@ -390,6 +391,16 @@
       .sort(function (x, y) { return x.age - y.age; }) : [];
     return { mode: r.growth || 'inflation', growth: growth, steps: steps };
   }
+  function incomeStrategy(state) {
+    var r = state.retirement || {};
+    return {
+      mode: r.incomeMode === 'dividends' ? 'dividends' : 'drawdown',
+      yield: clamp(num(r.dividendYield, CFG.defaults.dividendYield), 0, 0.2),
+      growth: clamp(num(r.capitalGrowth, CFG.defaults.capitalGrowth), -0.1, 0.1),
+      includeOa: !!r.dividendIncludeOa,
+    };
+  }
+
   function stepShare(steps, age) {
     var share = 1;
     (steps || []).forEach(function (x) { if (age >= x.age) share = x.share; });
@@ -528,6 +539,26 @@
 
   function round100(x) { return Math.round(x / 100) * 100; }
 
+  // Who relies on this person's income. Unanswered until the planner asks.
+  function dependantsOf(state, key) {
+    var d = (((state.needs || {})[key]) || {}).dependants || {};
+    var children = Math.max(0, Math.round(num(d.children)));
+    return {
+      answered: !!d.answered, spouse: !!d.spouse, children: children, parents: !!d.parents,
+      youngest: blank(d.youngest) ? null : Math.max(0, Math.round(num(d.youngest))),
+      any: !!d.spouse || children > 0 || !!d.parents,
+    };
+  }
+  // Years the family would need support: until the youngest child is 22,
+  // otherwise 5 years for a partner or 10 for parents.
+  function supportYears(dep) {
+    if (!dep.answered) return CFG.needs.supportYears;
+    if (dep.children > 0) return Math.max(5, 22 - (dep.youngest === null ? 0 : dep.youngest));
+    if (dep.parents) return 10;
+    if (dep.spouse) return 5;
+    return 0;
+  }
+
   function needDefaults(state, p, y) {
     var N = CFG.needs, a = assumptions(state), ps = people(state);
     var liabs = (state.liabilities || []).filter(function (l) { return num(l.yearsLeft, 1) > 0; });
@@ -543,9 +574,14 @@
     var takeHome = round100(y.takeHome / 12);
     var care = round100(Math.max(0, N.careMonthly - CFG.cpf.careShieldPayout));
     var toRetire = Math.max(0, p.retireAge - p.age);
+    var dep = dependantsOf(state, p.key), sy = supportYears(dep);
+    var supportNote = !dep.answered ? 'Take-home pay for ' + sy + ' years. Answer who depends on this income to size it.'
+      : !dep.any ? 'No one depends on this income, so no family support is needed'
+      : dep.children > 0 ? 'Take-home pay until the youngest child is 22 (' + sy + ' years)'
+      : 'Take-home pay for ' + sy + ' years for ' + (dep.parents ? 'parents' : 'a partner') ;
     return {
       death: {
-        support: { monthly: takeHome, duration: N.supportYears, note: 'Your take-home pay for ' + N.supportYears + ' years' },
+        support: { monthly: takeHome, duration: sy, note: supportNote },
         mortgage: { amount: mortgage, note: mortgage ? 'Outstanding home loans' : 'No home loan recorded' },
         debts: { amount: debts, note: debts ? 'Car, study and other loans' : 'No other loans recorded' },
         education: { amount: Math.round(education), note: education ? 'From education goals' : 'Add a university goal to fill this' },
@@ -621,6 +657,12 @@
         ci: roundTo(a.ciMultiple * basis, -3),
       };
       var needs = coverNeeds(state, p, y);
+      var dep = dependantsOf(state, p.key);
+      // With no dependants, death cover only needs to clear debts and final costs.
+      if (dep.answered && !dep.any) {
+        var keep = needs.death.items.filter(function (i) { return i.id === 'mortgage' || i.id === 'debts' || i.id === 'final'; });
+        rule.death = roundTo(sum(keep, function (i) { return i.total; }), -3);
+      }
       var detailed = { death: roundTo(needs.death.need, -3), tpd: roundTo(needs.tpd.need, -3), ci: roundTo(needs.ci.need, -3) };
       var base = needs.method === 'needs' ? detailed : rule;
       var target = { death: base.death, tpd: base.tpd, ci: base.ci, di: Math.round(a.diReplacement * basis / 12) };
@@ -631,8 +673,10 @@
           status: t <= 0 ? 'good' : ratio >= 1 ? 'good' : ratio >= 0.5 ? 'warning' : 'critical',
         };
       }
+      var deathRow = row('death', 'Death', 'lump');
+      if (!dep.answered) { deathRow.status = 'neutral'; deathRow.unconfirmed = true; }
       var rows = [
-        row('death', 'Death', 'lump'),
+        deathRow,
         row('tpd', 'Total & permanent disability', 'lump'),
         row('ci', 'Critical illness', 'lump'),
         row('di', 'Disability income', 'month'),
@@ -641,7 +685,7 @@
       rows.push({ id: 'hospital', label: 'Hospitalisation', unit: 'ward', current: cur.ward, target: a.targetWard, status: wr >= tr ? 'good' : wr >= 2 ? 'warning' : 'critical' });
       rows.push({ id: 'pa', label: 'Personal accident', unit: 'flag', current: cur.accident > 0 || pols.some(function (x) { return x.type === 'pa'; }), target: true });
       rows[rows.length - 1].status = rows[rows.length - 1].current ? 'good' : 'warning';
-      return { key: p.key, name: p.name, basis: basis, current: cur, target: target, rule: rule, detailed: detailed, method: needs.method, needs: needs, rows: rows, policies: pols };
+      return { key: p.key, name: p.name, basis: basis, current: cur, target: target, rule: rule, detailed: detailed, method: needs.method, needs: needs, rows: rows, policies: pols, dependants: dep };
     });
   }
 
@@ -702,6 +746,8 @@
     // Ring-fenced emergency fund: never spent, so the plan treats dipping
     // into it as a shortfall. Capped at the cash held today.
     var reserve = a.ringFence ? Math.min(cash, emergencyReserve(state)) : 0;
+    var income = incomeStrategy(state);
+    var divStarted = false;
 
     for (var t = 0; t < horizon; t++) {
       var year = CFG.baseYear + t, clientAge = client.age + t;
@@ -754,7 +800,11 @@
             if (incapNow) f.extra += sc.annualExtra;
           }
           var waived = isWho && (sc.type === 'tpd') && age >= sc.age;
-          if (!waived) f.premiums += sum(pols.filter(function (x) { return premiumDue(x, age); }), function (x) { return annual(x.premium, x.freq); });
+          if (!waived) f.premiums += sum(pols.filter(function (x) { return premiumDue(x, age); }), function (x) {
+            var prem = annual(x.premium, x.freq);
+            if (x.type === 'hospital') prem *= hospitalAgeFactor(age) / hospitalAgeFactor(p.age) * Math.pow(1 + a.inflation, t);
+            return prem;
+          });
 
           var housing = sum(liabs.filter(function (l) { return l.type === 'mortgage' && t < num(l.yearsLeft) && ownedBy(p.key, l.owner || 'client'); }), function (l) {
             var share = l.owner === 'joint' && ps.length > 1 ? 0.5 : 1;
@@ -807,10 +857,23 @@
         });
       });
 
-      var inflow = f.takeHome + f.cpfLife + f.lumpSum + f.cpfBequest + f.di;
+      // Dividend-only retirement: at retirement the pot moves into an income
+      // portfolio. Only its dividends are spent; the capital is never drawn.
+      f.dividends = 0;
+      if (income.mode === 'dividends' && retiredPhase) {
+        if (!divStarted) {
+          var moved = Math.max(0, cash - reserve);
+          cash -= moved; inv += moved;
+          if (income.includeOa) ps.forEach(function (p) { var s = cpf[p.key]; if (aliveLast[p.key] && perAge[p.key] >= CFG.cpf.raAge) { inv += s.oa; s.oa = 0; } });
+          divStarted = true;
+          events.push({ kind: 'income', label: 'Nest egg moved to a dividend portfolio' });
+        }
+        f.dividends = inv * income.yield;
+      }
+      var inflow = f.takeHome + f.cpfLife + f.lumpSum + f.cpfBequest + f.di + f.dividends;
       var outflow = f.tax + f.living + f.loans + f.premiums + f.goals + f.invest + f.extra + f.cpfShortfall;
       if (cash > 0) cash *= 1 + a.cashRate;
-      inv *= 1 + (retiredPhase ? a.postRetReturn : a.preRetReturn);
+      inv *= 1 + (divStarted ? income.growth : retiredPhase ? a.postRetReturn : a.preRetReturn);
       var net = inflow - outflow;
       f.surplusSpent = 0; f.surplusInvested = 0;
       if (net > 0) {
@@ -821,7 +884,7 @@
         inv += f.surplusInvested;
       } else cash += net;
       inv += f.invest;
-      if (cash < reserve && inv > 0) {
+      if (cash < reserve && inv > 0 && !divStarted) {
         var draw = Math.min(reserve - cash, inv);
         inv -= draw; cash += draw; f.drawdown = draw;
       }
@@ -829,7 +892,7 @@
       f.cpfDraw = 0;
       ps.forEach(function (p) {
         var s = cpf[p.key];
-        if (cash < reserve && aliveLast[p.key] && perAge[p.key] >= CFG.cpf.raAge && s.oa > 0) {
+        if (cash < reserve && !divStarted && aliveLast[p.key] && perAge[p.key] >= CFG.cpf.raAge && s.oa > 0) {
           var d = Math.min(reserve - cash, s.oa);
           s.oa -= d; cash += d; f.cpfDraw += d;
         }
@@ -838,14 +901,17 @@
         if (e.kind === 'goal' && !goalStatus[e.id]) goalStatus[e.id] = { age: clientAge, funded: cash >= reserve, from: f.cpfDraw > 0 ? 'CPF' : f.drawdown > 0 ? 'investments' : 'cash' };
       });
 
-      var cpfRow = {}, cpfSum = 0;
-      ps.forEach(function (p) { var s = cpf[p.key]; cpfRow[p.key] = { oa: s.oa, sa: s.sa, ma: s.ma, ra: s.ra }; cpfSum += cpfTotal(s); });
+      var cpfRow = {}, cpfSum = 0, oaSum = 0;
+      ps.forEach(function (p) { var s = cpf[p.key]; cpfRow[p.key] = { oa: s.oa, sa: s.sa, ma: s.ma, ra: s.ra }; cpfSum += cpfTotal(s); oaSum += s.oa; });
       rows.push({
         t: t, year: year, age: clientAge, ages: perAge,
         cash: cash, investments: inv, cpf: cpfSum, cpfBy: cpfRow,
         shortfall: Math.min(0, cash - reserve), reserve: reserve,
         total: Math.max(0, cash) + inv + cpfSum,
         net: cash + inv + cpfSum,
+        // What the household could actually spend: cash (net of any shortfall),
+        // investments and CPF OA. Excludes MediSave and the RA.
+        spendable: cash + inv + oaSum,
         inflow: inflow, outflow: outflow, flows: f, events: events,
       });
       if (!anyAlive) break; // single-person household after a death scenario
@@ -892,14 +958,20 @@
   // Money the household can spend in retirement: cash, investments and CPF OA
   // at the end of the last working year. RA savings are not counted here
   // because they come back as CPF LIFE payouts, which reduce the target.
-  function resourcesAt(sim, retireAge, opening) {
+  // OA only counts for people who are 55 or older at retirement, because it
+  // cannot be withdrawn before then. In dividend mode OA counts only if it is
+  // moved into the portfolio.
+  function resourcesAt(sim, retireAge, opening, countOa) {
     var row = null;
     for (var i = 0; i < sim.rows.length; i++) if (sim.rows[i].age === retireAge - 1) row = sim.rows[i];
     if (!row) return opening;
-    var oa = 0;
-    Object.keys(row.cpfBy).forEach(function (k) { oa += row.cpfBy[k].oa; });
+    var oa = 0, locked = 0;
+    Object.keys(row.cpfBy).forEach(function (k) {
+      var ok = countOa !== false && row.ages[k] + 1 >= CFG.cpf.raAge;
+      if (ok) oa += row.cpfBy[k].oa; else locked += row.cpfBy[k].oa;
+    });
     var cash = Math.max(0, row.cash - (row.reserve || 0));
-    return { cash: cash, investments: row.investments, cpfOa: oa, total: cash + row.investments + oa };
+    return { cash: cash, investments: row.investments, cpfOa: oa, oaLocked: locked, total: cash + row.investments + oa };
   }
 
   function withRetireAge(state, age) {
@@ -909,8 +981,10 @@
     return s;
   }
 
-  function retirementAnalysis(state, sim, nw) {
+  function retirementAnalysis(state, sim, nw, opts) {
+    opts = opts || {};
     var a = assumptions(state), ps = people(state), client = ps[0];
+    var income = incomeStrategy(state);
     var r = state.retirement || {};
     var horizonAge = Math.max.apply(null, ps.map(function (p) { return p.lifeExpectancy + (client.age - p.age); }));
     var opening = { cash: nw.liquid, investments: nw.investments, cpfOa: sum(ps, function (p) { return num(p.cpfIn.oa); }), total: 0 };
@@ -931,12 +1005,22 @@
     function plan(retireAge, s) {
       var n = Math.max(0, retireAge - client.age);
       var tg = nestEggTarget({ age: client.age, retireAge: retireAge, horizonAge: horizonAge, monthlyToday: spending, inflation: a.inflation, growth: pattern.growth, steps: pattern.steps, returnRate: a.postRetReturn, payouts: payoutsFor(s) });
-      var res = resourcesAt(s, retireAge, opening);
-      var gap = Math.max(0, tg.target - res.total);
+      var res = resourcesAt(s, retireAge, opening, income.mode === 'dividends' ? income.includeOa : true);
+      var target = tg.target;
+      if (income.mode === 'dividends') {
+        // Pot whose dividends alone cover spending less CPF LIFE in every year.
+        target = 0;
+        tg.path.forEach(function (x, k) {
+          var y = income.yield * Math.pow(1 + income.growth, k);
+          if (y > 0) target = Math.max(target, Math.max(0, x.spending - x.payouts) / y);
+        });
+      }
+      var gap = Math.max(0, target - res.total);
       return {
-        retireAge: retireAge, years: n, target: tg.target, firstYearSpending: tg.firstYearSpending, path: tg.path,
+        mode: income.mode, dividendMonthly: res.total * income.yield / 12,
+        retireAge: retireAge, years: n, target: target, firstYearSpending: tg.firstYearSpending, path: tg.path,
         deflator: Math.pow(1 + a.inflation, n),
-        resources: res, projected: res.total, progress: tg.target > 0 ? res.total / tg.target : 1, gap: gap,
+        resources: res, projected: res.total, progress: target > 0 ? res.total / target : 1, gap: gap,
         extraMonthly: n > 0 ? Math.max(0, -PMT(a.preRetReturn, n, 0, gap, 1) / 12) : gap,
         shortfallAge: s.shortfallAge,
       };
@@ -953,7 +1037,7 @@
       return { delay: d, monthly: Math.max(0, -PMT(a.preRetReturn, n - d, 0, base.gap, 1) / 12) };
     });
     // The FIRE sheet's "FIRE Alternatives": retire 10 / 5 years earlier or later.
-    var alternatives = [-10, -5, 0, 5, 10].map(function (d) { return client.retireAge + d; })
+    var alternatives = opts.skipAlternatives ? [] : [-10, -5, 0, 5, 10].map(function (d) { return client.retireAge + d; })
       .filter(function (age) { return age > client.age && age < horizonAge; })
       .map(function (age) { return plan(age, age === client.retireAge ? sim : simulate(withRetireAge(state, age))); });
     // The template's "IF I INVEST MONTHLY NOW".
@@ -961,7 +1045,7 @@
     var extraFv = n > 0 ? FV(a.preRetReturn, n, -(extra * 12), 0, 1) : 0;
 
     return {
-      horizonAge: horizonAge, payouts: payoutsFor(sim), monthlySpending: spending, pattern: pattern, base: base,
+      horizonAge: horizonAge, payouts: payoutsFor(sim), monthlySpending: spending, pattern: pattern, income: income, base: base,
       strategies: strategies, delays: delays, alternatives: alternatives,
       whatIf: { monthly: extra, fv: extraFv, progress: base.target > 0 ? (base.projected + extraFv) / base.target : 1 },
     };
@@ -1035,8 +1119,9 @@
 
     var gaps = 0, areas = 0;
     m.protection.forEach(function (p) {
-      p.rows.forEach(function (r) { areas++; if (r.status !== 'good') gaps++; });
-      p.rows.filter(function (r) { return r.unit === 'lump' || r.unit === 'month'; }).forEach(function (r) {
+      if (!p.dependants.answered) recs.push({ area: 'Protection', go: 'protection', weight: 72, text: 'Confirm who depends on ' + p.name + '\u2019s income before sizing death cover.' });
+      p.rows.forEach(function (r) { if (r.status === 'neutral') return; areas++; if (r.status !== 'good') gaps++; });
+      p.rows.filter(function (r) { return (r.unit === 'lump' || r.unit === 'month') && r.status !== 'neutral'; }).forEach(function (r) {
         if (r.gap > 0 && r.status !== 'good') recs.push({ area: 'Protection', go: 'protection', weight: 40 + 45 * (1 - Math.min(1, r.ratio)), text: p.name + ': ' + r.label.toLowerCase() + ' cover is short by ' + fmtMoney(r.gap) + (r.unit === 'month' ? ' a month' : '') + '.' });
       });
       var h = p.rows.find(function (r) { return r.id === 'hospital'; });
@@ -1049,15 +1134,16 @@
     });
 
     var rb = m.retirement.base, rp = rb.progress, sized = rb.target > 0;
+    var sp = m.stress ? m.stress.retirement.progress : rp;
     items.push({
       id: 'retirement', label: 'Retirement readiness', value: rp, target: 1, unit: 'pct', go: 'retirement',
-      detail: sized ? 'Cash, investments and CPF OA vs the nest egg needed at age ' + rb.retireAge : 'Add retirement spending or expenses to size the target',
-      status: !sized ? 'warning' : rp >= 1 ? 'good' : rp >= 0.7 ? 'warning' : 'critical',
+      detail: sized ? pct(Math.min(rp, 9.99)) + ' funded at ' + rb.retireAge + ', ' + pct(Math.min(sp, 9.99)) + ' under the stress test' : 'Add retirement spending or expenses to size the target',
+      status: !sized ? 'warning' : rp >= 1 && sp >= 0.8 ? 'good' : rp >= 0.7 ? 'warning' : 'critical',
     });
     if (sized && rp < 1) recs.push({ area: 'Retirement', go: 'retirement', weight: 45 + 40 * (1 - rp), text: 'Invest ' + fmtMoney(rb.extraMonthly) + ' more a month (at ' + pct(a.preRetReturn) + ') to close the ' + fmtMoney(rb.gap) + ' retirement gap by age ' + rb.retireAge + '.' });
     // Idle cash: a large cash pile at retirement is an opportunity, not a win.
     var idle = rb.resources ? rb.resources.cash : 0;
-    if (sized && idle > rb.target * 0.3 && idle > 100000) recs.push({ area: 'Retirement', go: 'retirement', weight: 50, text: 'About ' + fmtMoney(idle) + ' builds up as cash earning ' + pct(a.cashRate, 1) + ' by age ' + rb.retireAge + '. Investing part of the monthly surplus would work harder.' });
+    if (sized && idle > rb.target * 0.3 && idle > 100000) recs.push({ area: 'Investing', go: 'cashflow', weight: 58, text: 'About ' + fmtMoney(idle) + ' builds up as cash earning ' + pct(a.cashRate, 1) + ' by age ' + rb.retireAge + '. Investing part of the monthly surplus would work harder.' });
 
     var sa = m.sim.shortfallAge;
     var anyIncome = hasIncome || m.sim.rows.some(function (r) { return r.inflow > 0; });
@@ -1067,6 +1153,18 @@
       status: !anyIncome ? 'warning' : sa === null ? 'good' : 'critical',
     });
     if (anyIncome && sa !== null) recs.push({ area: 'Timeline', go: 'timeline', weight: 90, text: 'Savings run out at age ' + sa + '. Lower retirement spending, retire later, or invest more.' });
+    var ssa = m.stress ? m.stress.sim.shortfallAge : null, sh = CFG.stress;
+    var shockText = 'returns ' + Math.round(-sh.returnShock * 100) + ' points lower and inflation ' + Math.round(sh.inflationShock * 100) + ' point higher';
+    items.push({
+      id: 'stress', label: 'Stress test', value: ssa, unit: 'age', go: 'timeline',
+      detail: !anyIncome ? 'Add income to run the stress test' : ssa === null ? 'Savings still last with ' + shockText : 'With ' + shockText + ', money runs out at age ' + ssa,
+      status: !anyIncome ? 'warning' : ssa === null ? 'good' : sa === null && ssa >= 85 ? 'warning' : 'critical',
+    });
+    if (anyIncome && sa === null && ssa !== null) recs.push({ area: 'Timeline', go: 'timeline', weight: 80, text: 'If markets disappoint (' + shockText + '), money runs out at age ' + ssa + '. Build a buffer by saving more or investing idle cash.' });
+    var a2 = m.assumptions;
+    if (anyIncome && a2.surplusSaved < 1 && cf.surplus > 0 && (rp < 1 || ssa !== null)) {
+      recs.push({ area: 'Saving', go: 'cashflow', weight: 62, text: 'Save more of the monthly surplus: the plan keeps ' + pct(a2.surplusSaved) + ' of ' + fmtMoney(cf.surplus) + '. Saving all of it adds ' + fmtMoney(cf.surplus * (1 - a2.surplusSaved)) + ' a month.' });
+    }
 
     m.goals.forEach(function (g) {
       if (g.status && !g.status.funded) recs.push({ area: 'Goals', go: 'goals', weight: 65, text: (g.name || 'A goal') + ' at age ' + g.age + ' is not fully funded by the plan.' });
@@ -1079,7 +1177,11 @@
     });
 
     recs.sort(function (x, y) { return y.weight - x.weight; });
-    return { items: items, recommendations: recs };
+    // Lead with the strongest action from each area so one area (often
+    // protection) cannot fill every top spot.
+    var seen = {}, lead = [], rest = [];
+    recs.forEach(function (r) { if (!seen[r.area]) { seen[r.area] = true; lead.push(r); } else rest.push(r); });
+    return { items: items, recommendations: lead.concat(rest) };
   }
 
   /*
@@ -1101,15 +1203,23 @@
     var pr = [];
     m.protection.forEach(function (p) {
       p.rows.forEach(function (r) {
+        if (r.status === 'neutral') return;
         if (r.unit === 'lump' || r.unit === 'month') { if (r.target > 0) pr.push(Math.min(1, r.ratio)); }
         else pr.push(r.status === 'good' ? 1 : r.status === 'warning' ? 0.5 : 0);
       });
     });
     var prScore = pr.length ? sum(pr) / pr.length : null;
     areas.push({ id: 'protection', label: 'Protection', go: 'protection', score: prScore, detail: prScore === null ? 'Add policies' : pct(prScore) + ' of needs covered' });
-    var rb = m.retirement.base;
-    areas.push({ id: 'retirement', label: 'Retirement', go: 'retirement', score: rb.target > 0 ? clamp(rb.progress, 0, 1) : null,
-      detail: rb.target > 0 ? pct(Math.min(rb.progress, 9.99)) + ' funded' : 'Set retirement spending' });
+    var rb = m.retirement.base, sp = m.stress ? m.stress.retirement.progress : rb.progress;
+    areas.push({ id: 'retirement', label: 'Retirement', go: 'retirement', score: rb.target > 0 ? clamp((Math.min(rb.progress, 1.5) + Math.min(sp, 1.5)) / 2, 0, 1) : null,
+      detail: rb.target > 0 ? pct(Math.min(rb.progress, 9.99)) + ' funded, ' + pct(Math.min(sp, 9.99)) + ' stressed' : 'Set retirement spending' });
+    // Does the money last? Running out scores low; surviving only the base case scores partly.
+    var client = m.people[0], horizon = m.sim.rows.length ? m.sim.rows[m.sim.rows.length - 1].age : client.age;
+    var sa = m.sim.shortfallAge, ssa = m.stress ? m.stress.sim.shortfallAge : null;
+    var hasIncome = m.sim.rows.some(function (r) { return r.inflow > 0; });
+    areas.push({ id: 'lasts', label: 'Money lasts', go: 'timeline',
+      score: !hasIncome ? null : sa !== null ? clamp((sa - client.age) / Math.max(1, horizon - client.age), 0, 1) * 0.4 : ssa !== null ? 0.6 : 1,
+      detail: !hasIncome ? 'Add income' : sa !== null ? 'Runs out at ' + sa : ssa !== null ? 'Runs out at ' + ssa + ' if stressed' : 'Lasts to ' + horizon + ', even stressed' });
     var gs = m.goals.filter(function (g) { return g.status; });
     areas.push({ id: 'goals', label: 'Goals', go: 'goals', score: gs.length ? gs.filter(function (g) { return g.status.funded; }).length / gs.length : null,
       detail: gs.length ? gs.filter(function (g) { return g.status.funded; }).length + ' of ' + gs.length + ' funded' : 'No goals yet' });
@@ -1118,7 +1228,15 @@
       detail: cf.loanTotal > 0 ? pct(dsr) + ' of income on loans' : 'No loans' });
     areas.forEach(function (x) { x.status = status(x.score); });
     var scored = areas.filter(function (x) { return x.score !== null; });
-    return { overall: scored.length ? Math.round(sum(scored, function (x) { return x.score; }) / scored.length * 100) : null, areas: areas };
+    if (!scored.length) return { overall: null, areas: areas, capped: null };
+    var overall = Math.round(sum(scored, function (x) { return x.score; }) / scored.length * 100);
+    // Averages must not hide a failing area: the overall score can be at most
+    // 40 points above the weakest area, and at most 49 if the money runs out.
+    var weakest = Math.min.apply(null, scored.map(function (x) { return x.score; }));
+    var capped = null;
+    if (overall > weakest * 100 + 40) { overall = Math.round(weakest * 100 + 40); capped = 'weakest'; }
+    if (sa !== null && overall > 49) { overall = 49; capped = 'shortfall'; }
+    return { overall: overall, areas: areas, capped: capped };
   }
 
   function wardLabel(id) { var w = CFG.wards.find(function (x) { return x.id === id; }); return w ? w.label : id; }
@@ -1126,6 +1244,20 @@
   function pct(x) { return (Math.round(x * 1000) / 10) + '%'; }
 
   // --------------------------------------------------------------------- all
+
+  // The same plan with weaker markets: returns lower and inflation higher.
+  function stressState(state) {
+    var a = assumptions(state), sh = CFG.stress;
+    var s = Object.assign({}, state);
+    s.assumptions = Object.assign({}, state.assumptions || {}, {
+      preRetReturn: a.preRetReturn + sh.returnShock, postRetReturn: a.postRetReturn + sh.returnShock,
+      inflation: a.inflation + sh.inflationShock,
+    });
+    if (s.retirement && s.retirement.incomeMode === 'dividends') {
+      s.retirement = Object.assign({}, s.retirement, { dividendYield: incomeStrategy(state).yield + sh.returnShock / 2 });
+    }
+    return s;
+  }
 
   function computeAll(state) {
     var a = assumptions(state), ps = people(state);
@@ -1136,7 +1268,10 @@
     var scenario = state.scenario && state.scenario.type && state.scenario.type !== 'none' ? simulate(state, state.scenario) : null;
     var retirement = retirementAnalysis(state, sim, nw);
     var goals = goalsAnalysis(state, sim);
-    var m = { assumptions: a, people: ps, cashflow: cashflow, netWorth: nw, protection: protection, sim: sim, scenario: scenario, retirement: retirement, goals: goals };
+    var st = stressState(state);
+    var stressSim = simulate(st, { type: 'none' });
+    var stress = { sim: stressSim, retirement: retirementAnalysis(st, stressSim, nw, { skipAlternatives: true }).base, shocks: CFG.stress };
+    var m = { assumptions: a, people: ps, cashflow: cashflow, netWorth: nw, protection: protection, sim: sim, scenario: scenario, retirement: retirement, goals: goals, stress: stress };
     m.health = healthCheck(m);
     m.score = healthScore(m);
     return m;
@@ -1155,6 +1290,6 @@
     goalSchedule: goalSchedule, goalSetAside: goalSetAside, retirementSpending: retirementSpending, scenarioDefaults: scenarioDefaults, normalizeScenario: normalizeScenario,
     simulate: simulate, nestEggTarget: nestEggTarget, retirementAnalysis: retirementAnalysis, resourcesAt: resourcesAt,
     goalsAnalysis: goalsAnalysis, healthCheck: healthCheck, healthScore: healthScore, computeAll: computeAll,
-    NEED_ITEMS: NEED_ITEMS, NEED_RISKS: NEED_RISKS, coverNeeds: coverNeeds, spendingPattern: spendingPattern, lifePlan: lifePlan, emergencyReserve: emergencyReserve, payoutStartAge: payoutStartAge, says: says,
+    NEED_ITEMS: NEED_ITEMS, stressState: stressState, incomeStrategy: incomeStrategy, hospitalAgeFactor: hospitalAgeFactor, NEED_RISKS: NEED_RISKS, coverNeeds: coverNeeds, spendingPattern: spendingPattern, lifePlan: lifePlan, emergencyReserve: emergencyReserve, payoutStartAge: payoutStartAge, says: says,
   };
 });

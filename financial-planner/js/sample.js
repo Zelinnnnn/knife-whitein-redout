@@ -46,7 +46,7 @@
 
   function assumptions() {
     return {
-      inflation: 0.03, salaryGrowth: 0.02, cashRate: 0.005, preRetReturn: 0.06, postRetReturn: 0.05,
+      inflation: 0.03, salaryGrowth: 0.02, cashRate: 0.005, preRetReturn: 0.05, postRetReturn: 0.04, surplusSaved: 0.7, surplusInvest: 0,
       emergencyMonths: 6, deathMultiple: 10, ciMultiple: 5, diReplacement: 0.75, targetWard: 'private',
       allocation: { fixed: 0.4, variable: 0.3, savings: 0.2, insurance: 0.1 },
       taxRebate: { rate: 0.5, cap: 200 },
@@ -62,8 +62,8 @@
       household: 'Sample household',
       hasSpouse: true,
       people: {
-        client: { name: 'Alex', age: 26, gender: 'male', retireAge: 55, lifeExpectancy: 85 },
-        spouse: { name: 'Jamie', age: 25, gender: 'female', retireAge: 60, lifeExpectancy: 88 },
+        client: { name: 'Alex', age: 26, gender: 'male', retireAge: 55, lifeExpectancy: 95 },
+        spouse: { name: 'Jamie', age: 25, gender: 'female', retireAge: 60, lifeExpectancy: 95 },
       },
       assumptions: assumptions(),
       income: {
@@ -105,6 +105,10 @@
       retirement: { monthlySpending: 4000, includeInvestments: true, includeExcessCash: false, monthlyInvest: '' },
       tax: { client: emptyTax(), spouse: emptyTax() },
       scenario: { type: 'none', who: 'client', age: 40 },
+      needs: {
+        client: { dependants: { answered: true, spouse: true, children: 0, youngest: '', parents: false } },
+        spouse: { dependants: { answered: true, spouse: true, children: 0, youngest: '', parents: false } },
+      },
     };
   }
 
@@ -114,8 +118,8 @@
     s.household = '';
     s.hasSpouse = false;
     s.people = {
-      client: { name: '', age: 30, gender: 'male', retireAge: 63, lifeExpectancy: 85 },
-      spouse: { name: '', age: 30, gender: 'female', retireAge: 63, lifeExpectancy: 88 },
+      client: { name: '', age: 30, gender: 'male', retireAge: 63, lifeExpectancy: 95 },
+      spouse: { name: '', age: 30, gender: 'female', retireAge: 63, lifeExpectancy: 95 },
     };
     s.income = {
       client: { salary: 0, bonus: 0, business: 0, dividends: 0, interest: 0, rental: 0, others: 0 },
@@ -133,6 +137,7 @@
     s.goals = [];
     s.retirement = { monthlySpending: '', includeInvestments: true, includeExcessCash: false, monthlyInvest: '' };
     s.scenario = { type: 'none', who: 'client', age: 45 };
+    s.needs = {};
     return s;
   }
 

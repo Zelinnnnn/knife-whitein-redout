@@ -76,16 +76,40 @@
       latestPayoutAge: 70,
       deferralRate: 0.07,
 
-      // MediShield Life annual premiums by age (from the Excel template's
-      // CPF Estimator sheet). Paid from MediSave.
+      // MediShield Life annual premiums (incl. GST) by age next birthday,
+      // MOH schedule from April 2025. Paid from MediSave.
       medishield: [
-        { maxAge: 20, premium: 147.71 },
-        { maxAge: 30, premium: 254.67 },
-        { maxAge: 40, premium: 397.29 },
-        { maxAge: 50, premium: 534.81 },
-        { maxAge: 60, premium: 814.95 },
-        { maxAge: 65, premium: 1039.07 },
-        { maxAge: 999, premium: 1120.56 },
+        { maxAge: 20, premium: 200 },
+        { maxAge: 30, premium: 295 },
+        { maxAge: 40, premium: 503 },
+        { maxAge: 50, premium: 637 },
+        { maxAge: 60, premium: 903 },
+        { maxAge: 65, premium: 1131 },
+        { maxAge: 70, premium: 1326 },
+        { maxAge: 73, premium: 1643 },
+        { maxAge: 75, premium: 1816 },
+        { maxAge: 78, premium: 2027 },
+        { maxAge: 80, premium: 2187 },
+        { maxAge: 83, premium: 2303 },
+        { maxAge: 85, premium: 2616 },
+        { maxAge: 88, premium: 2785 },
+        { maxAge: 90, premium: 2826 },
+        { maxAge: 999, premium: 2903 },
+      ],
+      // Shape of Integrated Shield plan + rider premiums by age, relative to
+      // age 30. Hospital plan premiums entered today are scaled along this
+      // curve (and by inflation) as the insured gets older.
+      hospitalPremiumCurve: [
+        { maxAge: 30, factor: 1 },
+        { maxAge: 40, factor: 1.4 },
+        { maxAge: 50, factor: 2.1 },
+        { maxAge: 60, factor: 3.4 },
+        { maxAge: 65, factor: 4.6 },
+        { maxAge: 70, factor: 5.8 },
+        { maxAge: 75, factor: 7.5 },
+        { maxAge: 80, factor: 9.5 },
+        { maxAge: 85, factor: 11.5 },
+        { maxAge: 999, factor: 13 },
       ],
 
       // CareShield Life base premium (2020 cohort at 30) grown 2% a year to 2025,
@@ -157,12 +181,16 @@
       inflation: 0.03,
       salaryGrowth: 0.02,
       cashRate: 0.005,
-      preRetReturn: 0.06,
-      postRetReturn: 0.05,
+      // Conservative by default: about 2% and 1% above inflation.
+      preRetReturn: 0.05,
+      postRetReturn: 0.04,
       retirementGrowth: 0.025, // custom spending growth after retirement
-      surplusSaved: 1,     // share of each year's surplus kept (the rest is spent)
+      surplusSaved: 0.7,   // share of each year's surplus kept (the rest is spent)
       surplusInvest: 0,    // share of the kept surplus that goes to investments
       ringFence: false,    // keep the emergency fund out of the projection
+      planToAge: 95,
+      dividendYield: 0.04, // dividend-only retirement: yield on the pot
+      capitalGrowth: 0.01, // and growth of the pot's capital value
       emergencyMonths: 6,
       deathMultiple: 10,
       ciMultiple: 5,
@@ -177,6 +205,9 @@
       ],
       taxRebate: { rate: 0.5, cap: 200 },
     },
+
+    // Stress test shown beside every projection.
+    stress: { returnShock: -0.02, inflationShock: 0.01 },
 
     wards: [
       { id: 'none', label: 'None', rank: 0 },
